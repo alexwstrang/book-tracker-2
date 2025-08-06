@@ -26,11 +26,6 @@
         .dragging {
             opacity: 0.5;
         }
-        .drag-over-placeholder {
-            height: 2px;
-            background-color: #4f46e5; /* indigo-600 */
-            margin-top: -3px;
-        }
     </style>
 </head>
 <body>
@@ -79,6 +74,21 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+
+        // --- Helper Functions ---
+        const parseGenre = (categories) => {
+            if (!categories || categories.length === 0) return 'General';
+            for (const category of categories) {
+                const parts = category.split(/ \/ | > /);
+                for (let i = parts.length - 1; i >= 0; i--) {
+                    const part = parts[i].trim();
+                    if (part.toLowerCase() !== 'fiction' && part.toLowerCase() !== 'non-fiction' && part.toLowerCase() !== 'general') {
+                        return part;
+                    }
+                }
+            }
+            return 'General'; // Fallback
+        };
 
         // --- Main App Component ---
         function App() {
@@ -168,7 +178,7 @@
 
         // --- Main Dashboard Component ---
         function Dashboard({ user }) {
-            const [view, setView] = useState('gallery'); // Default view is now gallery
+            const [view, setView] = useState('gallery');
             const [books, setBooks] = useState([]);
             const [loadingBooks, setLoadingBooks] = useState(true);
 
@@ -177,7 +187,6 @@
                 const q = query(collection(db, "readings"), where("userId", "==", user.uid));
                 const querySnapshot = await getDocs(q);
                 const userBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Sort books by date ascending
                 userBooks.sort((a, b) => new Date(a.readDate) - new Date(b.readDate));
                 setBooks(userBooks);
                 setLoadingBooks(false);
@@ -214,7 +223,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.04</span>
+                        <span className="font-mono text-xs text-gray-500">v0.06</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -253,7 +262,8 @@
                             title: book.title || 'N/A',
                             author: book.authors ? book.authors.join(', ') : 'N/A',
                             isFiction: book.categories ? !book.categories.some(c => c.toLowerCase().includes('nonfiction')) : true,
-                            genre: book.categories ? book.categories[0] : 'General',
+                            genre: parseGenre(book.categories),
+                            pageCount: book.pageCount || 0,
                             publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
                             coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${book.title.split(' ').join('+')}`,
                         });
@@ -361,7 +371,8 @@
                                 title: book.title || 'N/A',
                                 author: book.authors ? book.authors.join(', ') : 'N/A',
                                 isFiction: book.categories ? !book.categories.some(c => c.toLowerCase().includes('nonfiction')) : true,
-                                genre: book.categories ? book.categories[0] : 'General',
+                                genre: parseGenre(book.categories),
+                                pageCount: book.pageCount || 0,
                                 publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
                                 coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${book.title.split(' ').join('+')}`,
                                 readMonth: new Date().getMonth(),
@@ -397,7 +408,7 @@
                 try {
                     const batch = writeBatch(db);
                     booksToAdd.forEach(book => {
-                        const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0]; // Use 15th to avoid timezone issues
+                        const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                         const newBookRef = doc(collection(db, "readings"));
                         batch.set(newBookRef, {
                             ...book,
@@ -462,7 +473,7 @@
 
         // --- Stats Component ---
         function Stats({ books, loading }) {
-            const [year, setYear] = useState(new Date().getFullYear());
+            const [year, setYear] = useState('All Time');
             
             const availableYears = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
@@ -470,13 +481,14 @@
                 for (let y = currentYear; y >= 2014; y--) {
                     years.add(y);
                 }
-                return Array.from(years).sort((a, b) => b - a);
+                return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
             }, [books]);
 
             const stats = useMemo(() => {
-                const filteredBooks = books.filter(b => b.readYear === year);
+                const filteredBooks = year === 'All Time' ? books : books.filter(b => b.readYear === year);
                 if (filteredBooks.length === 0) return null;
 
+                const totalPagesRead = filteredBooks.reduce((acc, book) => acc + (book.pageCount || 0), 0);
                 const fictionCount = filteredBooks.filter(b => b.isFiction).length;
                 const nonfictionCount = filteredBooks.length - fictionCount;
 
@@ -492,15 +504,17 @@
                 const mostReadAuthor = Object.entries(authorCounts).sort((a, b) => b[1] - a[1])[0];
 
                 const monthlyCounts = Array(12).fill(0);
-                filteredBooks.forEach(book => {
-                    const month = new Date(book.readDate).getMonth();
-                    monthlyCounts[month]++;
-                });
+                if (year !== 'All Time') {
+                    filteredBooks.forEach(book => {
+                        const month = new Date(book.readDate).getMonth();
+                        monthlyCounts[month]++;
+                    });
+                }
                 
                 const weirdestBook = filteredBooks.find(b => b.isWeirdest);
 
                 return {
-                    total: filteredBooks.length, fictionCount, nonfictionCount, genreCounts,
+                    total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, genreCounts,
                     mostReadAuthor: mostReadAuthor ? `${mostReadAuthor[0]} (${mostReadAuthor[1]} books)` : 'N/A',
                     monthlyCounts, weirdestBook
                 };
@@ -552,40 +566,43 @@
                 <div>
                     <div className="flex items-center gap-4 mb-6">
                         <h2 className="text-2xl font-bold">Statistics for</h2>
-                        <select value={year} onChange={e => setYear(Number(e.target.value))} className="p-2 bg-gray-700 rounded-md">
+                        <select value={year} onChange={e => setYear(e.target.value === 'All Time' ? 'All Time' : Number(e.target.value))} className="p-2 bg-gray-700 rounded-md">
                             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                     </div>
 
                     {!stats ? (
-                        <p className="text-gray-400">No books read in {year}. Add one to see your stats!</p>
+                        <p className="text-gray-400">No books read for this period. Add one to see your stats!</p>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Books Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.total}</p></div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Pages Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.totalPagesRead.toLocaleString()}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Most Read Author</h3><p className="text-3xl font-bold text-indigo-400">{stats.mostReadAuthor}</p></div>
-                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Weirdest Book of {year}</h3>{stats.weirdestBook ? <p className="text-xl font-bold text-indigo-400">{stats.weirdestBook.title}</p> : <p className="text-gray-400 text-sm">No book marked as "weirdest" yet.</p>}</div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Weirdest Book</h3>{stats.weirdestBook ? <p className="text-xl font-bold text-indigo-400">{stats.weirdestBook.title}</p> : <p className="text-gray-400 text-sm">No book marked as "weirdest" yet.</p>}</div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg md:col-span-1"><h3 className="font-bold text-lg mb-2">Fiction vs. Non-Fiction</h3><canvas id="pie-chart"></canvas></div>
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-3"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
 
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-3">
-                                <h3 className="font-bold text-lg mb-2">Monthly Reading Heatmap</h3>
-                                <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mt-4">
-                                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => {
-                                        const count = stats.monthlyCounts[i];
-                                        const maxCount = Math.max(...stats.monthlyCounts);
-                                        const opacity = maxCount > 0 ? (count / maxCount) : 0;
-                                        return (
-                                            <div key={month} className="flex flex-col items-center">
-                                                <div className="w-full h-16 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(129, 140, 248, ${opacity})` }}>
-                                                    <span className="font-bold text-white text-xl">{count}</span>
+                            {year !== 'All Time' && (
+                                <div className="p-4 bg-gray-800 rounded-lg md:col-span-4">
+                                    <h3 className="font-bold text-lg mb-2">Monthly Reading Heatmap</h3>
+                                    <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mt-4">
+                                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => {
+                                            const count = stats.monthlyCounts[i];
+                                            const maxCount = Math.max(...stats.monthlyCounts);
+                                            const opacity = maxCount > 0 ? (count / maxCount) : 0;
+                                            return (
+                                                <div key={month} className="flex flex-col items-center">
+                                                    <div className="w-full h-16 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(129, 140, 248, ${opacity})` }}>
+                                                        <span className="font-bold text-white text-xl">{count}</span>
+                                                    </div>
+                                                    <p className="text-xs mt-1 text-gray-400">{month}</p>
                                                 </div>
-                                                <p className="text-xs mt-1 text-gray-400">{month}</p>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -594,7 +611,7 @@
 
         // --- Books Display (Gallery + List) Component ---
         function BooksDisplay({ books, loading, onBookUpdated }) {
-            const [viewMode, setViewMode] = useState('list'); // Default to list view
+            const [viewMode, setViewMode] = useState('list');
             const [displayedBooks, setDisplayedBooks] = useState([]);
             
             const draggedItem = useRef(null);
@@ -638,7 +655,6 @@
                 }
             };
             
-            // Drag and Drop Handlers
             const handleDragStart = (e, position) => {
                 draggedItem.current = position;
                 e.target.classList.add('dragging');
@@ -657,8 +673,6 @@
             
             const handleDragEnd = (e) => {
                 e.target.classList.remove('dragging');
-                // Note: This order is only saved in the local state. 
-                // A "Save Order" button would be needed to persist to Firestore.
             };
 
 
@@ -710,39 +724,53 @@
                             ))}
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {displayedBooks.map((book, index) => (
-                                <div 
-                                    key={book.id} 
-                                    className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, index)}
-                                    onDragEnter={(e) => handleDragEnter(e, index)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => e.preventDefault()}
-                                >
-                                    <img src={book.coverUrl} alt={book.title} className="w-16 h-24 object-cover rounded-md flex-shrink-0"/>
-                                    <div className="flex-grow">
-                                        <p className="font-bold text-white">{book.title}</p>
-                                        <p className="text-sm text-gray-400">{book.author}</p>
-                                        <p className="text-xs text-gray-500">Read: {new Date(book.readDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row gap-2 items-center">
-                                        <button 
-                                            onClick={() => setWeirdestBook(book.id, book.readYear)}
-                                            className={`px-3 py-1 text-xs rounded ${book.isWeirdest ? 'bg-yellow-400 text-black' : 'bg-gray-600 text-white'}`}
-                                        >
-                                            {book.isWeirdest ? '★ Weirdest' : 'Mark as Weirdest'}
-                                        </button>
-                                        <button 
-                                            onClick={() => deleteBook(book.id)}
-                                            className="px-3 py-1 text-xs rounded bg-red-800 text-white hover:bg-red-700"
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
+                        <div className="overflow-x-auto">
+                            <div className="min-w-full space-y-3">
+                                {/* Header */}
+                                <div className="hidden md:grid grid-cols-12 gap-4 px-3 py-2 text-xs font-bold text-gray-400 uppercase">
+                                    <div className="col-span-4">Title</div>
+                                    <div className="col-span-2">Author</div>
+                                    <div className="col-span-1">Type</div>
+                                    <div className="col-span-2">Genre</div>
+                                    <div className="col-span-1">Month</div>
+                                    <div className="col-span-1">Pages</div>
+                                    <div className="col-span-1"></div>
                                 </div>
-                            ))}
+                                {/* Body */}
+                                {displayedBooks.map((book, index) => (
+                                    <div 
+                                        key={book.id} 
+                                        className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, index)}
+                                        onDragEnter={(e) => handleDragEnter(e, index)}
+                                        onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => e.preventDefault()}
+                                    >
+                                        <div className="col-span-1 md:col-span-4 flex items-center gap-4">
+                                            <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
+                                            <span className="font-bold text-white">{book.title}</span>
+                                        </div>
+                                        <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
+                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
+                                        <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.genre}</div>
+                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{new Date(book.readDate).toLocaleDateString('en-US', { month: 'short' })}</div>
+                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.pageCount}</div>
+                                        <div className="col-span-1 md:col-span-1 flex justify-end gap-2">
+                                            <button 
+                                                onClick={() => setWeirdestBook(book.id, book.readYear)}
+                                                className={`px-2 py-1 text-xs rounded ${book.isWeirdest ? 'bg-yellow-400 text-black' : 'bg-gray-600 text-white'}`}
+                                                title="Mark as Weirdest"
+                                            >★</button>
+                                            <button 
+                                                onClick={() => deleteBook(book.id)}
+                                                className="px-2 py-1 text-xs rounded bg-red-800 text-white hover:bg-red-700"
+                                                title="Delete Book"
+                                            >X</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
