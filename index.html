@@ -90,6 +90,10 @@
             return 'General'; // Fallback
         };
 
+        const sanitizeIsbn = (isbn) => {
+            return isbn.replace(/[-\s]/g, '');
+        };
+
         // --- Main App Component ---
         function App() {
             const [user, setUser] = useState(null);
@@ -223,7 +227,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.06</span>
+                        <span className="font-mono text-xs text-gray-500">v0.07</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -253,7 +257,8 @@
                 setError('');
                 setBookData(null);
                 try {
-                    const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${GOOGLE_BOOKS_API_KEY ? '&key=' + GOOGLE_BOOKS_API_KEY : ''}`;
+                    const sanitized = sanitizeIsbn(isbn);
+                    const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${sanitized}${GOOGLE_BOOKS_API_KEY ? '&key=' + GOOGLE_BOOKS_API_KEY : ''}`;
                     const response = await fetch(url);
                     const data = await response.json();
                     if (data.totalItems > 0) {
@@ -282,7 +287,7 @@
                 
                 const bookToAdd = {
                     ...bookData,
-                    isbn,
+                    isbn: sanitizeIsbn(isbn),
                     readDate,
                     readYear: new Date(readDate).getFullYear(),
                     userId: auth.currentUser.uid,
@@ -360,7 +365,8 @@
                 }
 
                 try {
-                    const bookPromises = isbns.map(async isbn => {
+                    const bookPromises = isbns.map(async rawIsbn => {
+                        const isbn = sanitizeIsbn(rawIsbn);
                         const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${GOOGLE_BOOKS_API_KEY ? '&key=' + GOOGLE_BOOKS_API_KEY : ''}`;
                         const response = await fetch(url);
                         const data = await response.json();
@@ -379,7 +385,7 @@
                                 readYear: new Date().getFullYear(),
                             };
                         }
-                        return { isbn, error: 'Not Found' };
+                        return { isbn: rawIsbn, error: 'Not Found' };
                     });
 
                     const results = await Promise.all(bookPromises);
