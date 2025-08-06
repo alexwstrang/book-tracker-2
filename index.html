@@ -79,7 +79,7 @@
         const parseGenre = (categories) => {
             if (!categories || categories.length === 0) return 'General';
             
-            const forbiddenTerms = ['fiction', 'non-fiction', 'general', 'biography & autobiography', 'comics & graphic novels'];
+            const forbiddenTerms = ['fiction', 'non-fiction', 'general', 'biography & autobiography', 'comics & graphic novels', 'books'];
             let potentialGenres = [];
 
             for (const category of categories) {
@@ -93,6 +93,13 @@
             }
             
             return potentialGenres.length > 0 ? potentialGenres[potentialGenres.length - 1] : 'General';
+        };
+        
+        const isNonFiction = (categories) => {
+            if (!categories || categories.length === 0) return false;
+            const nonFictionKeywords = ['biography', 'autobiography', 'history', 'science', 'business', 'psychology', 'self-help', 'memoir', 'true crime', 'nonfiction'];
+            const categoryString = categories.join(' ').toLowerCase();
+            return nonFictionKeywords.some(keyword => categoryString.includes(keyword));
         };
 
 
@@ -234,7 +241,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.13</span>
+                        <span className="font-mono text-xs text-gray-500">v0.16</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -273,7 +280,7 @@
                         setBookData({
                             title: book.title || 'N/A',
                             author: book.authors ? book.authors.join(', ') : 'N/A',
-                            isFiction: book.categories ? !book.categories.some(c => c.toLowerCase().includes('nonfiction')) : true,
+                            isFiction: !isNonFiction(book.categories),
                             genre: parseGenre(book.categories),
                             pageCount: book.pageCount || 0,
                             publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
@@ -383,7 +390,7 @@
                                 isbn,
                                 title: book.title || 'N/A',
                                 author: book.authors ? book.authors.join(', ') : 'N/A',
-                                isFiction: book.categories ? !book.categories.some(c => c.toLowerCase().includes('nonfiction')) : true,
+                                isFiction: !isNonFiction(book.categories),
                                 genre: parseGenre(book.categories),
                                 pageCount: book.pageCount || 0,
                                 publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
@@ -621,86 +628,23 @@
         }
         
         // --- Lightbox Component ---
-        function Lightbox({ book, allBooks, onClose }) {
-            const [recommendations, setRecommendations] = useState([]);
-            const [loadingRecs, setLoadingRecs] = useState(false);
-
+        function Lightbox({ book, onClose }) {
             if (!book) return null;
-
-            const findSimilarBooks = async () => {
-                setLoadingRecs(true);
-                setRecommendations([]);
-                const authorQuery = book.author.split(',')[0]; // Use only the first author for better results
-                const genreQuery = book.genre;
-                const query = `inauthor:"${authorQuery}"+subject:"${genreQuery}"`;
-                
-                try {
-                    const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&key=${GOOGLE_BOOKS_API_KEY}`;
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    const existingIsbns = new Set(allBooks.map(b => b.isbn));
-                    
-                    if (data.items) {
-                        const similarBooks = data.items
-                            .map(item => {
-                                const volInfo = item.volumeInfo;
-                                const isbn13 = volInfo.industryIdentifiers?.find(i => i.type === 'ISBN_13')?.identifier;
-                                const isbn10 = volInfo.industryIdentifiers?.find(i => i.type === 'ISBN_10')?.identifier;
-                                
-                                return {
-                                    id: item.id,
-                                    title: volInfo.title,
-                                    author: volInfo.authors ? volInfo.authors.join(', ') : 'N/A',
-                                    coverUrl: volInfo.imageLinks?.thumbnail,
-                                    isbn: isbn13 || isbn10,
-                                };
-                            })
-                            .filter(b => b.isbn && !existingIsbns.has(b.isbn) && b.id !== book.id); // Filter out existing and self
-                        
-                        setRecommendations(similarBooks.slice(0, 5)); // Show top 5
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch recommendations:", error);
-                }
-                setLoadingRecs(false);
-            };
 
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-gray-800 p-6 rounded-lg max-w-3xl w-full max-h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div className="flex flex-col md:flex-row gap-6">
-                            <img src={book.coverUrl.replace('&zoom=1', '&zoom=2')} alt={book.title} className="w-48 h-auto object-cover rounded-md shadow-lg self-center md:self-start" />
-                            <div className="flex flex-col flex-grow">
-                                <h2 className="text-2xl font-bold text-white mb-2">{book.title}</h2>
-                                <p className="text-lg text-gray-300 mb-4">{book.author}</p>
-                                <div className="space-y-2 text-sm">
-                                    <p><span className="font-bold text-gray-400">Type:</span> {book.isFiction ? 'Fiction' : 'Non-Fiction'}</p>
-                                    <p><span className="font-bold text-gray-400">Genre:</span> {book.genre}</p>
-                                    <p><span className="font-bold text-gray-400">Pages:</span> {book.pageCount > 0 ? book.pageCount : 'N/A'}</p>
-                                    <p><span className="font-bold text-gray-400">Read:</span> {new Date(book.readDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-                                </div>
-                                <button onClick={onClose} className="mt-4 md:mt-auto ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-lg w-full flex flex-col md:flex-row gap-6" onClick={e => e.stopPropagation()}>
+                        <img src={book.coverUrl} alt={book.title} className="w-48 h-auto object-cover rounded-md shadow-lg self-center md:self-start" />
+                        <div className="flex flex-col flex-grow">
+                            <h2 className="text-2xl font-bold text-white mb-2">{book.title}</h2>
+                            <p className="text-lg text-gray-300 mb-4">{book.author}</p>
+                            <div className="space-y-2 text-sm">
+                                <p><span className="font-bold text-gray-400">Type:</span> {book.isFiction ? 'Fiction' : 'Non-Fiction'}</p>
+                                <p><span className="font-bold text-gray-400">Genre:</span> {book.genre}</p>
+                                <p><span className="font-bold text-gray-400">Pages:</span> {book.pageCount > 0 ? book.pageCount : 'N/A'}</p>
+                                <p><span className="font-bold text-gray-400">Read:</span> {new Date(book.readDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
                             </div>
-                        </div>
-                        <div className="mt-6 border-t border-gray-700 pt-4">
-                            <button onClick={findSimilarBooks} disabled={loadingRecs} className="w-full px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-700 disabled:bg-gray-500">
-                                {loadingRecs ? 'Searching...' : 'Find Similar Books'}
-                            </button>
-                            {recommendations.length > 0 && (
-                                <div className="mt-4">
-                                    <h3 className="font-bold text-lg mb-2">You might also like:</h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                                        {recommendations.map(rec => (
-                                            <div key={rec.id}>
-                                                <img src={rec.coverUrl} alt={rec.title} className="w-full h-auto object-cover rounded-md"/>
-                                                <p className="text-xs font-bold mt-1">{rec.title}</p>
-                                                <p className="text-xs text-gray-400">{rec.author}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <button onClick={onClose} className="mt-4 md:mt-auto ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
                         </div>
                     </div>
                 </div>
@@ -778,8 +722,10 @@
 
             const handleEditClick = (book) => {
                 setEditingBookId(book.id);
+                const date = new Date(book.readDate);
                 setEditFormData({
-                    readDate: book.readDate,
+                    readMonth: date.getMonth(),
+                    readYear: date.getFullYear(),
                     pageCount: book.pageCount || 0,
                     genre: book.genre,
                 });
@@ -790,12 +736,13 @@
             };
 
             const handleSaveEdit = async (bookId) => {
-                const { readDate, pageCount, genre } = editFormData;
+                const { readMonth, readYear, pageCount, genre } = editFormData;
+                const newReadDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
                 const updatedData = {
-                    readDate,
+                    readDate: newReadDate,
                     pageCount: Number(pageCount),
                     genre,
-                    readYear: new Date(readDate).getFullYear(),
+                    readYear: Number(readYear),
                 };
                 const bookRef = doc(db, "readings", bookId);
                 await updateDoc(bookRef, updatedData);
@@ -816,7 +763,7 @@
 
             return (
                 <div>
-                    <Lightbox book={lightboxBook} allBooks={books} onClose={() => setLightboxBook(null)} />
+                    <Lightbox book={lightboxBook} onClose={() => setLightboxBook(null)} />
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Books Read This Year</h2>
                          <div className="flex items-center bg-gray-800 p-1 rounded-lg">
@@ -858,7 +805,8 @@
                             <div className="min-w-full space-y-3">
                                 {/* Header */}
                                 <div className="hidden md:grid grid-cols-12 gap-4 px-3 py-2 text-xs font-bold text-gray-400 uppercase">
-                                    <div className="col-span-4">Title</div>
+                                    <div className="col-span-1 text-center">#</div>
+                                    <div className="col-span-3">Title</div>
                                     <div className="col-span-2">Author</div>
                                     <div className="col-span-1">Type</div>
                                     <div className="col-span-2">Genre</div>
@@ -871,14 +819,20 @@
                                     const isEditing = editingBookId === book.id;
                                     return isEditing ? (
                                         <div key={book.id} className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-indigo-900 rounded-lg">
-                                            <div className="col-span-1 md:col-span-4 font-bold text-white">{book.title}</div>
+                                            <div className="col-span-1 md:col-span-1 text-center font-bold text-gray-400">{index + 1}</div>
+                                            <div className="col-span-1 md:col-span-3 font-bold text-white">{book.title}</div>
                                             <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
                                             <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
                                             <div className="col-span-1 md:col-span-2">
                                                 <input type="text" name="genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
                                             </div>
                                             <div className="col-span-1 md:col-span-1">
-                                                <input type="month" name="readDate" value={editFormData.readDate.substring(0, 7)} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
+                                                <div className="flex gap-1">
+                                                    <select name="readMonth" value={editFormData.readMonth} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm">
+                                                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                    </select>
+                                                    <input type="number" name="readYear" value={editFormData.readYear} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
+                                                </div>
                                             </div>
                                             <div className="col-span-1 md:col-span-1">
                                                 <input type="number" name="pageCount" value={editFormData.pageCount} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
@@ -897,7 +851,8 @@
                                             onDragOver={(e) => handleDragOver(e, index)}
                                             onDrop={handleDrop}
                                         >
-                                            <div className="col-span-1 md:col-span-4 flex items-center gap-4">
+                                            <div className="col-span-1 md:col-span-1 text-center font-bold text-gray-400">{index + 1}</div>
+                                            <div className="col-span-1 md:col-span-3 flex items-center gap-4">
                                                 <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
                                                 <span className="font-bold text-white">{book.title}</span>
                                             </div>
