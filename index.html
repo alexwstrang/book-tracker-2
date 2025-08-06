@@ -242,7 +242,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.21</span>
+                        <span className="font-mono text-xs text-gray-500">v0.20</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -570,7 +570,12 @@
                 const filteredBooks = year === 'All Time' ? books : books.filter(b => b.readYear === year);
                 if (filteredBooks.length === 0) return null;
 
+                const booksWithPages = filteredBooks.filter(b => b.pageCount > 0);
                 const totalPagesRead = filteredBooks.reduce((acc, book) => acc + Number(book.pageCount || 0), 0);
+                const averagePageCount = booksWithPages.length > 0 ? Math.round(totalPagesRead / booksWithPages.length) : 0;
+                const shortestBook = booksWithPages.length > 0 ? [...booksWithPages].sort((a, b) => a.pageCount - b.pageCount)[0] : null;
+                const longestBook = booksWithPages.length > 0 ? [...booksWithPages].sort((a, b) => b.pageCount - a.pageCount)[0] : null;
+
                 const fictionCount = filteredBooks.filter(b => b.isFiction).length;
                 const nonfictionCount = filteredBooks.length - fictionCount;
 
@@ -584,30 +589,42 @@
                     return acc;
                 }, {});
                 const mostReadAuthor = Object.entries(authorCounts).sort((a, b) => b[1] - a[1])[0];
+                const uniqueAuthors = new Set(filteredBooks.map(b => b.author)).size;
 
                 const monthlyCounts = Array(12).fill(0);
+                const pagesPerMonth = Array(12).fill(0);
                 if (year !== 'All Time') {
                     filteredBooks.forEach(book => {
                         const month = new Date(book.readDate).getMonth();
                         monthlyCounts[month]++;
+                        pagesPerMonth[month] += Number(book.pageCount || 0);
                     });
                 }
+                
+                const booksByDecade = filteredBooks.reduce((acc, book) => {
+                    if (book.publicationYear) {
+                        const decade = Math.floor(book.publicationYear / 10) * 10;
+                        acc[decade] = (acc[decade] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
+
 
                 return {
                     total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, genreCounts,
                     mostReadAuthor: mostReadAuthor ? `${mostReadAuthor[0]} (${mostReadAuthor[1]} books)` : 'N/A',
-                    monthlyCounts
+                    monthlyCounts, pagesPerMonth, averagePageCount, shortestBook, longestBook, uniqueAuthors, booksByDecade
                 };
             }, [year, books]);
 
             useEffect(() => {
-                let pieChartInstance;
-                let barChartInstance;
+                let pieChart, barChart, lineChart, decadeChart;
+                const chartInstances = [];
 
                 if (stats) {
                     const pieCtx = document.getElementById('pie-chart')?.getContext('2d');
                     if (pieCtx) {
-                        pieChartInstance = new Chart(pieCtx, {
+                        pieChart = new Chart(pieCtx, {
                             type: 'pie',
                             data: {
                                 labels: ['Fiction', 'Non-Fiction'],
@@ -615,27 +632,54 @@
                             },
                             options: { plugins: { legend: { labels: { color: 'white' }}}}
                         });
+                        chartInstances.push(pieChart);
                     }
 
                     const barCtx = document.getElementById('bar-chart')?.getContext('2d');
                     if (barCtx) {
-                        barChartInstance = new Chart(barCtx, {
+                        barChart = new Chart(barCtx, {
                             type: 'bar',
                             data: {
                                 labels: Object.keys(stats.genreCounts),
                                 datasets: [{ label: 'Books per Genre', data: Object.values(stats.genreCounts), backgroundColor: '#818cf8' }]
                             },
-                            options: {
-                                scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } },
-                                plugins: { legend: { display: false }}
-                            }
+                            options: { scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false }} }
                         });
+                        chartInstances.push(barChart);
+                    }
+                    
+                    if (year !== 'All Time') {
+                        const lineCtx = document.getElementById('line-chart')?.getContext('2d');
+                        if(lineCtx) {
+                            lineChart = new Chart(lineCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                                    datasets: [{ label: 'Pages Read per Month', data: stats.pagesPerMonth, borderColor: '#818cf8', tension: 0.1 }]
+                                },
+                                options: { scales: { y: { ticks: { color: 'white' }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false }} }
+                            });
+                            chartInstances.push(lineChart);
+                        }
+                    }
+
+                    const decadeCtx = document.getElementById('decade-chart')?.getContext('2d');
+                    if (decadeCtx) {
+                        const sortedDecades = Object.keys(stats.booksByDecade).sort();
+                        decadeChart = new Chart(decadeCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: sortedDecades.map(d => `${d}s`),
+                                datasets: [{ label: 'Books by Decade', data: sortedDecades.map(d => stats.booksByDecade[d]), backgroundColor: '#818cf8' }]
+                            },
+                            options: { scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false }} }
+                        });
+                        chartInstances.push(decadeChart);
                     }
                 }
 
                 return () => {
-                    if (pieChartInstance) pieChartInstance.destroy();
-                    if (barChartInstance) barChartInstance.destroy();
+                    chartInstances.forEach(chart => chart.destroy());
                 };
             }, [stats]);
 
@@ -654,32 +698,24 @@
                     {!stats ? (
                         <p className="text-gray-400">No books read for this period. Add one to see your stats!</p>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Books Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.total}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Pages Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.totalPagesRead.toLocaleString()}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Most Read Author</h3><p className="text-3xl font-bold text-indigo-400">{stats.mostReadAuthor}</p></div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Authors</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueAuthors}</p></div>
+                            
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Avg. Book Length</h3><p className="text-3xl font-bold text-indigo-400">{stats.averagePageCount.toLocaleString()} pgs</p></div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Shortest Book</h3><p className="text-xl font-bold text-indigo-400 truncate">{stats.shortestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p></div>
+                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Longest Book</h3><p className="text-xl font-bold text-indigo-400 truncate">{stats.longestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p></div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg md:col-span-1"><h3 className="font-bold text-lg mb-2">Fiction vs. Non-Fiction</h3><canvas id="pie-chart"></canvas></div>
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2 xl:col-span-3"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Books by Decade</h3><canvas id="decade-chart"></canvas></div>
 
                             {year !== 'All Time' && (
-                                <div className="p-4 bg-gray-800 rounded-lg md:col-span-3">
-                                    <h3 className="font-bold text-lg mb-2">Monthly Reading Heatmap</h3>
-                                    <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mt-4">
-                                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => {
-                                            const count = stats.monthlyCounts[i];
-                                            const maxCount = Math.max(...stats.monthlyCounts);
-                                            const opacity = maxCount > 0 ? (count / maxCount) : 0;
-                                            return (
-                                                <div key={month} className="flex flex-col items-center">
-                                                    <div className="w-full h-16 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(129, 140, 248, ${opacity})` }}>
-                                                        <span className="font-bold text-white text-xl">{count}</span>
-                                                    </div>
-                                                    <p className="text-xs mt-1 text-gray-400">{month}</p>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                <div className="p-4 bg-gray-800 rounded-lg md:col-span-2 xl:col-span-4">
+                                    <h3 className="font-bold text-lg mb-2">Monthly Reading Pace (Pages)</h3>
+                                    <canvas id="line-chart"></canvas>
                                 </div>
                             )}
                         </div>
