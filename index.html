@@ -78,17 +78,23 @@
         // --- Helper Functions ---
         const parseGenre = (categories) => {
             if (!categories || categories.length === 0) return 'General';
+            
+            const forbiddenTerms = ['fiction', 'non-fiction', 'general', 'biography & autobiography', 'comics & graphic novels'];
+            let potentialGenres = [];
+
             for (const category of categories) {
                 const parts = category.split(/ \/ | > /);
-                for (let i = parts.length - 1; i >= 0; i--) {
-                    const part = parts[i].trim();
-                    if (part.toLowerCase() !== 'fiction' && part.toLowerCase() !== 'non-fiction' && part.toLowerCase() !== 'general') {
-                        return part;
+                for (const part of parts) {
+                    const cleanPart = part.trim();
+                    if (cleanPart && !forbiddenTerms.includes(cleanPart.toLowerCase())) {
+                        potentialGenres.push(cleanPart);
                     }
                 }
             }
-            return 'General'; // Fallback
+            
+            return potentialGenres.length > 0 ? potentialGenres[potentialGenres.length - 1] : 'General';
         };
+
 
         const sanitizeIsbn = (isbn) => {
             return isbn.replace(/[-\s]/g, '');
@@ -227,7 +233,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.07</span>
+                        <span className="font-mono text-xs text-gray-500">v0.09</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -291,7 +297,6 @@
                     readDate,
                     readYear: new Date(readDate).getFullYear(),
                     userId: auth.currentUser.uid,
-                    isWeirdest: false,
                 };
 
                 try {
@@ -421,7 +426,6 @@
                             readDate,
                             readYear: book.readYear,
                             userId: auth.currentUser.uid,
-                            isWeirdest: false,
                         });
                     });
                     await batch.commit();
@@ -516,13 +520,11 @@
                         monthlyCounts[month]++;
                     });
                 }
-                
-                const weirdestBook = filteredBooks.find(b => b.isWeirdest);
 
                 return {
                     total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, genreCounts,
                     mostReadAuthor: mostReadAuthor ? `${mostReadAuthor[0]} (${mostReadAuthor[1]} books)` : 'N/A',
-                    monthlyCounts, weirdestBook
+                    monthlyCounts
                 };
             }, [year, books]);
 
@@ -580,17 +582,16 @@
                     {!stats ? (
                         <p className="text-gray-400">No books read for this period. Add one to see your stats!</p>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Books Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.total}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Total Pages Read</h3><p className="text-5xl font-bold text-indigo-400">{stats.totalPagesRead.toLocaleString()}</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Most Read Author</h3><p className="text-3xl font-bold text-indigo-400">{stats.mostReadAuthor}</p></div>
-                            <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Weirdest Book</h3>{stats.weirdestBook ? <p className="text-xl font-bold text-indigo-400">{stats.weirdestBook.title}</p> : <p className="text-gray-400 text-sm">No book marked as "weirdest" yet.</p>}</div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg md:col-span-1"><h3 className="font-bold text-lg mb-2">Fiction vs. Non-Fiction</h3><canvas id="pie-chart"></canvas></div>
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-3"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
 
                             {year !== 'All Time' && (
-                                <div className="p-4 bg-gray-800 rounded-lg md:col-span-4">
+                                <div className="p-4 bg-gray-800 rounded-lg md:col-span-3">
                                     <h3 className="font-bold text-lg mb-2">Monthly Reading Heatmap</h3>
                                     <div className="grid grid-cols-6 md:grid-cols-12 gap-2 mt-4">
                                         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, i) => {
@@ -619,6 +620,8 @@
         function BooksDisplay({ books, loading, onBookUpdated }) {
             const [viewMode, setViewMode] = useState('list');
             const [displayedBooks, setDisplayedBooks] = useState([]);
+            const [editingBookId, setEditingBookId] = useState(null);
+            const [editFormData, setEditFormData] = useState({});
             
             const draggedItem = useRef(null);
             const dragOverItem = useRef(null);
@@ -638,20 +641,6 @@
 
             const handleYearToggle = (year) => {
                 setSelectedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year]);
-            };
-
-            const setWeirdestBook = async (bookId, currentYear) => {
-                const yearBooks = books.filter(b => b.readYear === currentYear);
-                for (const book of yearBooks) {
-                    if (book.isWeirdest && book.id !== bookId) {
-                        const bookRef = doc(db, "readings", book.id);
-                        await updateDoc(bookRef, { isWeirdest: false });
-                    }
-                }
-                const bookRef = doc(db, "readings", bookId);
-                const currentBook = books.find(b => b.id === bookId);
-                await updateDoc(bookRef, { isWeirdest: !currentBook.isWeirdest });
-                onBookUpdated();
             };
             
             const deleteBook = async (bookId) => {
@@ -681,6 +670,38 @@
                 e.target.classList.remove('dragging');
             };
 
+            const handleEditClick = (book) => {
+                setEditingBookId(book.id);
+                setEditFormData({
+                    readDate: book.readDate,
+                    pageCount: book.pageCount || 0,
+                    genre: book.genre,
+                });
+            };
+
+            const handleCancelEdit = () => {
+                setEditingBookId(null);
+            };
+
+            const handleSaveEdit = async (bookId) => {
+                const { readDate, pageCount, genre } = editFormData;
+                const updatedData = {
+                    readDate,
+                    pageCount: Number(pageCount),
+                    genre,
+                    readYear: new Date(readDate).getFullYear(),
+                };
+                const bookRef = doc(db, "readings", bookId);
+                await updateDoc(bookRef, updatedData);
+                setEditingBookId(null);
+                onBookUpdated();
+            };
+
+            const handleEditFormChange = (e) => {
+                const { name, value } = e.target;
+                setEditFormData(prev => ({ ...prev, [name]: value }));
+            };
+
 
             if (loading) return <p>Loading books...</p>;
             
@@ -690,7 +711,7 @@
             return (
                 <div>
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Year in Review</h2>
+                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Books Read This Year</h2>
                          <div className="flex items-center bg-gray-800 p-1 rounded-lg">
                             <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
                             <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
@@ -743,39 +764,53 @@
                                     <div className="col-span-1"></div>
                                 </div>
                                 {/* Body */}
-                                {displayedBooks.map((book, index) => (
-                                    <div 
-                                        key={book.id} 
-                                        className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, index)}
-                                        onDragEnter={(e) => handleDragEnter(e, index)}
-                                        onDragEnd={handleDragEnd}
-                                        onDragOver={(e) => e.preventDefault()}
-                                    >
-                                        <div className="col-span-1 md:col-span-4 flex items-center gap-4">
-                                            <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
-                                            <span className="font-bold text-white">{book.title}</span>
+                                {displayedBooks.map((book, index) => {
+                                    const isEditing = editingBookId === book.id;
+                                    return isEditing ? (
+                                        <div key={book.id} className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-indigo-900 rounded-lg">
+                                            <div className="col-span-1 md:col-span-4 font-bold text-white">{book.title}</div>
+                                            <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
+                                            <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
+                                            <div className="col-span-1 md:col-span-2">
+                                                <input type="text" name="genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
+                                            </div>
+                                            <div className="col-span-1 md:col-span-1">
+                                                <input type="month" name="readDate" value={editFormData.readDate.substring(0, 7)} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
+                                            </div>
+                                            <div className="col-span-1 md:col-span-1">
+                                                <input type="number" name="pageCount" value={editFormData.pageCount} onChange={handleEditFormChange} className="w-full p-1 bg-gray-700 rounded-md text-sm"/>
+                                            </div>
+                                            <div className="col-span-1 md:col-span-1 flex justify-end gap-2">
+                                                <button onClick={() => handleSaveEdit(book.id)} className="px-2 py-1 text-xs rounded bg-green-600 text-white">Save</button>
+                                                <button onClick={handleCancelEdit} className="px-2 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
+                                            </div>
                                         </div>
-                                        <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
-                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
-                                        <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.genre}</div>
-                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{new Date(book.readDate).toLocaleDateString('en-US', { month: 'short' })}</div>
-                                        <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.pageCount}</div>
-                                        <div className="col-span-1 md:col-span-1 flex justify-end gap-2">
-                                            <button 
-                                                onClick={() => setWeirdestBook(book.id, book.readYear)}
-                                                className={`px-2 py-1 text-xs rounded ${book.isWeirdest ? 'bg-yellow-400 text-black' : 'bg-gray-600 text-white'}`}
-                                                title="Mark as Weirdest"
-                                            >★</button>
-                                            <button 
-                                                onClick={() => deleteBook(book.id)}
-                                                className="px-2 py-1 text-xs rounded bg-red-800 text-white hover:bg-red-700"
-                                                title="Delete Book"
-                                            >X</button>
+                                    ) : (
+                                        <div 
+                                            key={book.id} 
+                                            className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, index)}
+                                            onDragEnter={(e) => handleDragEnter(e, index)}
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => e.preventDefault()}
+                                        >
+                                            <div className="col-span-1 md:col-span-4 flex items-center gap-4">
+                                                <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
+                                                <span className="font-bold text-white">{book.title}</span>
+                                            </div>
+                                            <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
+                                            <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
+                                            <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.genre}</div>
+                                            <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{new Date(book.readDate).toLocaleDateString('en-US', { month: 'short' })}</div>
+                                            <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.pageCount > 0 ? book.pageCount : 'N/A'}</div>
+                                            <div className="col-span-1 md:col-span-1 flex justify-end gap-2">
+                                                <button onClick={() => handleEditClick(book)} className="px-2 py-1 text-xs rounded bg-gray-600 text-white">Edit</button>
+                                                <button onClick={() => deleteBook(book.id)} className="px-2 py-1 text-xs rounded bg-red-800 text-white hover:bg-red-700">X</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
