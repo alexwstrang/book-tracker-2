@@ -241,7 +241,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.17</span>
+                        <span className="font-mono text-xs text-gray-500">v0.18</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -263,7 +263,8 @@
             const [bookData, setBookData] = useState(null);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
-            const [readDate, setReadDate] = useState(new Date().toISOString().split('T')[0]);
+            const [readMonth, setReadMonth] = useState(new Date().getMonth());
+            const [readYear, setReadYear] = useState(new Date().getFullYear());
 
             const handleIsbnSearch = async (e) => {
                 e.preventDefault();
@@ -299,11 +300,12 @@
                 e.preventDefault();
                 if (!bookData) return;
                 
+                const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
                 const bookToAdd = {
                     ...bookData,
                     isbn: sanitizeIsbn(isbn),
                     readDate,
-                    readYear: new Date(readDate).getFullYear(),
+                    readYear: Number(readYear),
                     userId: auth.currentUser.uid,
                     orderIndex: Date.now(), // Set initial order
                 };
@@ -312,7 +314,8 @@
                     await addDoc(collection(db, "readings"), bookToAdd);
                     setIsbn('');
                     setBookData(null);
-                    setReadDate(new Date().toISOString().split('T')[0]);
+                    setReadMonth(new Date().getMonth());
+                    setReadYear(new Date().getFullYear());
                     onBookAdded();
                 } catch (err) {
                     setError('Failed to save book to your library.');
@@ -352,24 +355,29 @@
                                     <p className="text-gray-400">by {bookData.author}</p>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                        <input type="date" value={readDate} onChange={e => setReadDate(e.target.value)} className="w-full p-2 mt-1 bg-gray-700 rounded-md" />
+                                        <div className="flex gap-2 mt-1">
+                                            <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                                {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                            </select>
+                                            <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-400">Type</label>
-                                            <select name="isFiction" value={bookData.isFiction} onChange={e => handleBookDataChange({ target: { name: 'isFiction', value: e.target.value === 'true' }})} className="w-full p-2 mt-1 bg-gray-700 rounded-md">
+                                            <select name="isFiction" value={bookData.isFiction} onChange={e => handleBookDataChange({ target: { name: 'isFiction', value: e.target.value === 'true' }})} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
                                                 <option value="true">Fiction</option>
                                                 <option value="false">Non-Fiction</option>
                                             </select>
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-400">Pages</label>
-                                            <input type="number" name="pageCount" value={bookData.pageCount} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md"/>
+                                            <input type="number" name="pageCount" value={bookData.pageCount} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                         </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                        <input type="text" name="genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md"/>
+                                        <input type="text" name="genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                     </div>
                                     <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add to Library</button>
                                 </div>
@@ -499,20 +507,32 @@
                                                     <p className="font-bold">{book.title}</p>
                                                     <p className="text-sm text-gray-400">{book.author}</p>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <select value={book.readMonth} onChange={e => handleBookDataChange(index, 'readMonth', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm">
-                                                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                                    </select>
-                                                    <input type="number" value={book.readYear} onChange={e => handleBookDataChange(index, 'readYear', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm" />
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Date Read</label>
+                                                    <div className="flex gap-2 mt-1">
+                                                        <select value={book.readMonth} onChange={e => handleBookDataChange(index, 'readMonth', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white">
+                                                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                        </select>
+                                                        <input type="number" value={book.readYear} onChange={e => handleBookDataChange(index, 'readYear', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white" />
+                                                    </div>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2">
-                                                     <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="p-2 bg-gray-600 rounded-md text-sm">
-                                                        <option value="true">Fiction</option>
-                                                        <option value="false">Non-Fiction</option>
-                                                    </select>
-                                                    <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="p-2 bg-gray-600 rounded-md text-sm" placeholder="Pages"/>
+                                                     <div>
+                                                        <label className="block text-xs font-medium text-gray-400">Type</label>
+                                                        <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
+                                                            <option value="true">Fiction</option>
+                                                            <option value="false">Non-Fiction</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                                        <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    </div>
                                                 </div>
-                                                <input type="text" value={book.genre} onChange={e => handleBookDataChange(index, 'genre', e.target.value)} className="p-2 bg-gray-600 rounded-md text-sm" placeholder="Genre"/>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                                    <input type="text" value={book.genre} onChange={e => handleBookDataChange(index, 'genre', e.target.value)} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
