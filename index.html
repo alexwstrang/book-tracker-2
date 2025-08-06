@@ -23,6 +23,14 @@
         body {
             background-color: #111827; /* bg-gray-900 */
         }
+        .dragging {
+            opacity: 0.5;
+        }
+        .drag-over-placeholder {
+            height: 2px;
+            background-color: #4f46e5; /* indigo-600 */
+            margin-top: -3px;
+        }
     </style>
 </head>
 <body>
@@ -204,7 +212,10 @@
 
             return (
                 <header className="flex flex-col md:flex-row justify-between items-center">
-                    <h1 className="text-3xl font-bold text-white mb-4 md:mb-0">Book Tracker v0.02</h1>
+                    <div className="flex items-baseline gap-2 mb-4 md:mb-0">
+                        <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
+                        <span className="font-mono text-xs text-gray-500">v0.04</span>
+                    </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
                         <button onClick={() => setView('stats')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'stats' ? activeClass : inactiveClass}`}>Stats</button>
@@ -583,7 +594,12 @@
 
         // --- Books Display (Gallery + List) Component ---
         function BooksDisplay({ books, loading, onBookUpdated }) {
-            const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'list'
+            const [viewMode, setViewMode] = useState('list'); // Default to list view
+            const [displayedBooks, setDisplayedBooks] = useState([]);
+            
+            const draggedItem = useRef(null);
+            const dragOverItem = useRef(null);
+
             const allYears = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
                 for (let y = new Date().getFullYear(); y >= 2014; y--) years.add(y);
@@ -592,13 +608,14 @@
 
             const [selectedYears, setSelectedYears] = useState([new Date().getFullYear()]);
 
+            useEffect(() => {
+                const filtered = books.filter(b => selectedYears.includes(b.readYear));
+                setDisplayedBooks(filtered);
+            }, [books, selectedYears]);
+
             const handleYearToggle = (year) => {
                 setSelectedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year]);
             };
-
-            const filteredBooks = useMemo(() => {
-                return books.filter(b => selectedYears.includes(b.readYear));
-            }, [selectedYears, books]);
 
             const setWeirdestBook = async (bookId, currentYear) => {
                 const yearBooks = books.filter(b => b.readYear === currentYear);
@@ -620,6 +637,30 @@
                     onBookUpdated();
                 }
             };
+            
+            // Drag and Drop Handlers
+            const handleDragStart = (e, position) => {
+                draggedItem.current = position;
+                e.target.classList.add('dragging');
+            };
+
+            const handleDragEnter = (e, position) => {
+                dragOverItem.current = position;
+                const list = [...displayedBooks];
+                const draggedItemContent = list[draggedItem.current];
+                list.splice(draggedItem.current, 1);
+                list.splice(dragOverItem.current, 0, draggedItemContent);
+                draggedItem.current = dragOverItem.current;
+                dragOverItem.current = null;
+                setDisplayedBooks(list);
+            };
+            
+            const handleDragEnd = (e) => {
+                e.target.classList.remove('dragging');
+                // Note: This order is only saved in the local state. 
+                // A "Save Order" button would be needed to persist to Firestore.
+            };
+
 
             if (loading) return <p>Loading books...</p>;
             
@@ -631,8 +672,8 @@
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Year in Review</h2>
                          <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                            <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
                             <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                            <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
                          </div>
                     </div>
                     
@@ -650,11 +691,11 @@
                         </div>
                     </div>
 
-                    {filteredBooks.length === 0 ? (
+                    {displayedBooks.length === 0 ? (
                          <p className="text-gray-400">No books found for the selected year(s).</p>
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                            {filteredBooks.map(book => (
+                            {displayedBooks.map(book => (
                                 <div key={book.id} className="group relative">
                                     <img 
                                         src={book.coverUrl} 
@@ -670,8 +711,16 @@
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {filteredBooks.map(book => (
-                                <div key={book.id} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg">
+                            {displayedBooks.map((book, index) => (
+                                <div 
+                                    key={book.id} 
+                                    className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragEnter={(e) => handleDragEnter(e, index)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => e.preventDefault()}
+                                >
                                     <img src={book.coverUrl} alt={book.title} className="w-16 h-24 object-cover rounded-md flex-shrink-0"/>
                                     <div className="flex-grow">
                                         <p className="font-bold text-white">{book.title}</p>
