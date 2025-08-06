@@ -223,8 +223,8 @@
                 <div className="p-4 md:p-8">
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
-                        {view === 'add-single' && <AddBook onBookAdded={handleBooksChanged} />}
-                        {view === 'add-multiple' && <AddMultipleBooks onBooksAdded={handleBooksChanged} />}
+                        {view === 'add-single' && <AddBook onBookAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add-multiple' && <AddMultipleBooks onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
                         {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} />}
                     </main>
@@ -241,7 +241,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.18</span>
+                        <span className="font-mono text-xs text-gray-500">v0.19</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -258,7 +258,7 @@
         }
 
         // --- Add Single Book Component ---
-        function AddBook({ onBookAdded }) {
+        function AddBook({ onBookAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
             const [loading, setLoading] = useState(false);
@@ -329,7 +329,10 @@
 
             return (
                 <div className="max-w-2xl mx-auto p-6 bg-gray-800 rounded-lg">
-                    <h2 className="text-xl font-bold mb-4">Add a New Book</h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold">Add a New Book</h2>
+                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
+                    </div>
                     <form onSubmit={handleIsbnSearch} className="flex gap-2 mb-4">
                         <input
                             type="text"
@@ -389,7 +392,7 @@
         }
 
         // --- Add Multiple Books Component ---
-        function AddMultipleBooks({ onBooksAdded }) {
+        function AddMultipleBooks({ onBooksAdded, onCancel }) {
             const [isbnList, setIsbnList] = useState('');
             const [foundBooks, setFoundBooks] = useState([]);
             const [loading, setLoading] = useState(false);
@@ -477,7 +480,10 @@
 
             return (
                 <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
-                    <h2 className="text-xl font-bold mb-4">Add Multiple Books</h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold">Add Multiple Books</h2>
+                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
+                    </div>
                     <form onSubmit={handleFindBooks} className="mb-4">
                         <textarea
                             value={isbnList}
@@ -562,7 +568,7 @@
                 const filteredBooks = year === 'All Time' ? books : books.filter(b => b.readYear === year);
                 if (filteredBooks.length === 0) return null;
 
-                const totalPagesRead = filteredBooks.reduce((acc, book) => acc + (book.pageCount || 0), 0);
+                const totalPagesRead = filteredBooks.reduce((acc, book) => acc + Number(book.pageCount || 0), 0);
                 const fictionCount = filteredBooks.filter(b => b.isFiction).length;
                 const nonfictionCount = filteredBooks.length - fictionCount;
 
@@ -777,6 +783,8 @@
                 setEditingBookId(book.id);
                 const date = new Date(book.readDate);
                 setEditFormData({
+                    title: book.title,
+                    coverUrl: book.coverUrl,
                     readMonth: date.getMonth(),
                     readYear: date.getFullYear(),
                     pageCount: book.pageCount || 0,
@@ -789,12 +797,14 @@
             };
 
             const handleSaveEdit = async (bookId) => {
-                const { readMonth, readYear, pageCount, genre } = editFormData;
+                const { readMonth, readYear, pageCount, genre, title, coverUrl } = editFormData;
                 const newReadDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
                 const updatedData = {
                     readDate: newReadDate,
                     pageCount: Number(pageCount),
                     genre,
+                    title,
+                    coverUrl,
                     readYear: Number(readYear),
                 };
                 const bookRef = doc(db, "readings", bookId);
@@ -871,28 +881,37 @@
                                 {displayedBooks.map((book, index) => {
                                     const isEditing = editingBookId === book.id;
                                     return isEditing ? (
-                                        <div key={book.id} className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-indigo-900 rounded-lg">
-                                            <div className="col-span-1 md:col-span-1 text-center font-bold text-gray-400">{index + 1}</div>
-                                            <div className="col-span-1 md:col-span-3 font-bold text-white">{book.title}</div>
-                                            <div className="col-span-1 md:col-span-2 text-sm text-gray-400">{book.author}</div>
-                                            <div className="col-span-1 md:col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
-                                            <div className="col-span-1 md:col-span-2">
-                                                <input type="text" name="genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                            </div>
-                                            <div className="col-span-1 md:col-span-1">
-                                                <div className="flex gap-1">
-                                                    <select name="readMonth" value={editFormData.readMonth} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white">
-                                                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                                    </select>
-                                                    <input type="number" name="readYear" value={editFormData.readYear} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                        <div key={book.id} className="p-3 bg-indigo-900 rounded-lg space-y-3">
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Title</label>
+                                                    <input type="text" name="title" value={editFormData.title} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                                    <input type="text" name="genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Date Read</label>
+                                                    <div className="flex gap-1">
+                                                        <select name="readMonth" value={editFormData.readMonth} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white">
+                                                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                        </select>
+                                                        <input type="number" name="readYear" value={editFormData.readYear} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                                    <input type="number" name="pageCount" value={editFormData.pageCount} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
                                                 </div>
                                             </div>
-                                            <div className="col-span-1 md:col-span-1">
-                                                <input type="number" name="pageCount" value={editFormData.pageCount} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400">Cover Image URL</label>
+                                                <input type="text" name="coverUrl" value={editFormData.coverUrl} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
                                             </div>
-                                            <div className="col-span-1 md:col-span-1 flex justify-end gap-2">
-                                                <button onClick={() => handleSaveEdit(book.id)} className="px-2 py-1 text-xs rounded bg-green-600 text-white">Save</button>
-                                                <button onClick={handleCancelEdit} className="px-2 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
+                                            <div className="flex justify-end gap-2">
+                                                <button onClick={() => handleSaveEdit(book.id)} className="px-3 py-1 text-xs rounded bg-green-600 text-white">Save</button>
+                                                <button onClick={handleCancelEdit} className="px-3 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
                                             </div>
                                         </div>
                                     ) : (
