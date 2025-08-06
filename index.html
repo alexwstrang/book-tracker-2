@@ -197,7 +197,8 @@
                 const q = query(collection(db, "readings"), where("userId", "==", user.uid));
                 const querySnapshot = await getDocs(q);
                 const userBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                userBooks.sort((a, b) => new Date(a.readDate) - new Date(b.readDate));
+                // Sort by custom order first, then by date for books without an order
+                userBooks.sort((a, b) => (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity) || new Date(a.readDate) - new Date(b.readDate));
                 setBooks(userBooks);
                 setLoadingBooks(false);
             };
@@ -218,7 +219,7 @@
                         {view === 'add-single' && <AddBook onBookAdded={handleBooksChanged} />}
                         {view === 'add-multiple' && <AddMultipleBooks onBooksAdded={handleBooksChanged} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
-                        {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={handleBooksChanged} />}
+                        {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} />}
                     </main>
                 </div>
             );
@@ -233,7 +234,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.09</span>
+                        <span className="font-mono text-xs text-gray-500">v0.13</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -297,6 +298,7 @@
                     readDate,
                     readYear: new Date(readDate).getFullYear(),
                     userId: auth.currentUser.uid,
+                    orderIndex: Date.now(), // Set initial order
                 };
 
                 try {
@@ -418,7 +420,8 @@
 
                 try {
                     const batch = writeBatch(db);
-                    booksToAdd.forEach(book => {
+                    let baseOrderIndex = Date.now();
+                    booksToAdd.forEach((book, index) => {
                         const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                         const newBookRef = doc(collection(db, "readings"));
                         batch.set(newBookRef, {
@@ -426,6 +429,7 @@
                             readDate,
                             readYear: book.readYear,
                             userId: auth.currentUser.uid,
+                            orderIndex: baseOrderIndex + index, // Assign sequential order
                         });
                     });
                     await batch.commit();
@@ -615,6 +619,93 @@
                 </div>
             );
         }
+        
+        // --- Lightbox Component ---
+        function Lightbox({ book, allBooks, onClose }) {
+            const [recommendations, setRecommendations] = useState([]);
+            const [loadingRecs, setLoadingRecs] = useState(false);
+
+            if (!book) return null;
+
+            const findSimilarBooks = async () => {
+                setLoadingRecs(true);
+                setRecommendations([]);
+                const authorQuery = book.author.split(',')[0]; // Use only the first author for better results
+                const genreQuery = book.genre;
+                const query = `inauthor:"${authorQuery}"+subject:"${genreQuery}"`;
+                
+                try {
+                    const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&key=${GOOGLE_BOOKS_API_KEY}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    const existingIsbns = new Set(allBooks.map(b => b.isbn));
+                    
+                    if (data.items) {
+                        const similarBooks = data.items
+                            .map(item => {
+                                const volInfo = item.volumeInfo;
+                                const isbn13 = volInfo.industryIdentifiers?.find(i => i.type === 'ISBN_13')?.identifier;
+                                const isbn10 = volInfo.industryIdentifiers?.find(i => i.type === 'ISBN_10')?.identifier;
+                                
+                                return {
+                                    id: item.id,
+                                    title: volInfo.title,
+                                    author: volInfo.authors ? volInfo.authors.join(', ') : 'N/A',
+                                    coverUrl: volInfo.imageLinks?.thumbnail,
+                                    isbn: isbn13 || isbn10,
+                                };
+                            })
+                            .filter(b => b.isbn && !existingIsbns.has(b.isbn) && b.id !== book.id); // Filter out existing and self
+                        
+                        setRecommendations(similarBooks.slice(0, 5)); // Show top 5
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch recommendations:", error);
+                }
+                setLoadingRecs(false);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-3xl w-full max-h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col md:flex-row gap-6">
+                            <img src={book.coverUrl.replace('&zoom=1', '&zoom=2')} alt={book.title} className="w-48 h-auto object-cover rounded-md shadow-lg self-center md:self-start" />
+                            <div className="flex flex-col flex-grow">
+                                <h2 className="text-2xl font-bold text-white mb-2">{book.title}</h2>
+                                <p className="text-lg text-gray-300 mb-4">{book.author}</p>
+                                <div className="space-y-2 text-sm">
+                                    <p><span className="font-bold text-gray-400">Type:</span> {book.isFiction ? 'Fiction' : 'Non-Fiction'}</p>
+                                    <p><span className="font-bold text-gray-400">Genre:</span> {book.genre}</p>
+                                    <p><span className="font-bold text-gray-400">Pages:</span> {book.pageCount > 0 ? book.pageCount : 'N/A'}</p>
+                                    <p><span className="font-bold text-gray-400">Read:</span> {new Date(book.readDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                                </div>
+                                <button onClick={onClose} className="mt-4 md:mt-auto ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+                            </div>
+                        </div>
+                        <div className="mt-6 border-t border-gray-700 pt-4">
+                            <button onClick={findSimilarBooks} disabled={loadingRecs} className="w-full px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-700 disabled:bg-gray-500">
+                                {loadingRecs ? 'Searching...' : 'Find Similar Books'}
+                            </button>
+                            {recommendations.length > 0 && (
+                                <div className="mt-4">
+                                    <h3 className="font-bold text-lg mb-2">You might also like:</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                        {recommendations.map(rec => (
+                                            <div key={rec.id}>
+                                                <img src={rec.coverUrl} alt={rec.title} className="w-full h-auto object-cover rounded-md"/>
+                                                <p className="text-xs font-bold mt-1">{rec.title}</p>
+                                                <p className="text-xs text-gray-400">{rec.author}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
         // --- Books Display (Gallery + List) Component ---
         function BooksDisplay({ books, loading, onBookUpdated }) {
@@ -622,9 +713,9 @@
             const [displayedBooks, setDisplayedBooks] = useState([]);
             const [editingBookId, setEditingBookId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
+            const [lightboxBook, setLightboxBook] = useState(null);
             
             const draggedItem = useRef(null);
-            const dragOverItem = useRef(null);
 
             const allYears = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
@@ -640,7 +731,15 @@
             }, [books, selectedYears]);
 
             const handleYearToggle = (year) => {
-                setSelectedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year]);
+                if (viewMode === 'list') {
+                    setSelectedYears([year]);
+                } else { // viewMode is 'gallery'
+                    setSelectedYears(prev => 
+                        prev.includes(year) 
+                            ? prev.filter(y => y !== year) 
+                            : [...prev, year]
+                    );
+                }
             };
             
             const deleteBook = async (bookId) => {
@@ -650,24 +749,31 @@
                 }
             };
             
-            const handleDragStart = (e, position) => {
-                draggedItem.current = position;
-                e.target.classList.add('dragging');
+            const handleDragStart = (e, index) => {
+                draggedItem.current = displayedBooks[index];
+                e.dataTransfer.effectAllowed = 'move';
             };
 
-            const handleDragEnter = (e, position) => {
-                dragOverItem.current = position;
-                const list = [...displayedBooks];
-                const draggedItemContent = list[draggedItem.current];
-                list.splice(draggedItem.current, 1);
-                list.splice(dragOverItem.current, 0, draggedItemContent);
-                draggedItem.current = dragOverItem.current;
-                dragOverItem.current = null;
-                setDisplayedBooks(list);
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                const draggedOverItem = displayedBooks[index];
+                if (draggedItem.current === draggedOverItem) {
+                    return;
+                }
+                let items = displayedBooks.filter(item => item.id !== draggedItem.current.id);
+                items.splice(index, 0, draggedItem.current);
+                setDisplayedBooks(items);
             };
             
-            const handleDragEnd = (e) => {
-                e.target.classList.remove('dragging');
+            const handleDrop = async () => {
+                const batch = writeBatch(db);
+                displayedBooks.forEach((book, index) => {
+                    const bookRef = doc(db, "readings", book.id);
+                    batch.update(bookRef, { orderIndex: index });
+                });
+                await batch.commit();
+                draggedItem.current = null;
+                onBookUpdated();
             };
 
             const handleEditClick = (book) => {
@@ -710,6 +816,7 @@
 
             return (
                 <div>
+                    <Lightbox book={lightboxBook} allBooks={books} onClose={() => setLightboxBook(null)} />
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Books Read This Year</h2>
                          <div className="flex items-center bg-gray-800 p-1 rounded-lg">
@@ -737,17 +844,13 @@
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                             {displayedBooks.map(book => (
-                                <div key={book.id} className="group relative">
+                                <button key={book.id} onClick={() => setLightboxBook(book)} className="focus:outline-none">
                                     <img 
                                         src={book.coverUrl} 
                                         alt={`Cover of ${book.title}`}
-                                        className="w-full h-auto object-cover rounded-md shadow-lg transform group-hover:scale-105 transition-transform duration-300"
+                                        className="w-full h-auto object-cover rounded-md shadow-lg transform hover:scale-105 transition-transform duration-300"
                                     />
-                                    <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center p-2 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-md">
-                                        <p className="text-white font-bold text-sm">{book.title}</p>
-                                        <p className="text-gray-300 text-xs mt-1">{book.author}</p>
-                                    </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     ) : (
@@ -791,9 +894,8 @@
                                             className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-grab"
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, index)}
-                                            onDragEnter={(e) => handleDragEnter(e, index)}
-                                            onDragEnd={handleDragEnd}
-                                            onDragOver={(e) => e.preventDefault()}
+                                            onDragOver={(e) => handleDragOver(e, index)}
+                                            onDrop={handleDrop}
                                         >
                                             <div className="col-span-1 md:col-span-4 flex items-center gap-4">
                                                 <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
