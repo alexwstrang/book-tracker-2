@@ -824,6 +824,7 @@
             const [editingBookId, setEditingBookId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
             const [lightboxBook, setLightboxBook] = useState(null);
+            const [isEditingNewGenre, setIsEditingNewGenre] = useState(false);
             
             const draggedItem = useRef(null);
 
@@ -832,6 +833,9 @@
                 for (let y = new Date().getFullYear(); y >= 2014; y--) years.add(y);
                 return Array.from(years).sort((a, b) => b - a);
             }, [books]);
+            
+            const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
+            const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
 
             const [selectedYears, setSelectedYears] = useState([new Date().getFullYear()]);
 
@@ -897,11 +901,13 @@
                     pageCount: book.pageCount || 0,
                     genre: book.genre,
                     country: book.country || '',
+                    isFiction: book.isFiction,
                 });
             };
 
             const handleCancelEdit = () => {
                 setEditingBookId(null);
+                setIsEditingNewGenre(false);
             };
 
             const handleSaveEdit = async (bookId) => {
@@ -919,12 +925,23 @@
                 const bookRef = doc(db, "readings", bookId);
                 await updateDoc(bookRef, updatedData);
                 setEditingBookId(null);
+                setIsEditingNewGenre(false);
                 onBookUpdated();
             };
 
             const handleEditFormChange = (e) => {
                 const { name, value } = e.target;
-                setEditFormData(prev => ({ ...prev, [name]: value }));
+                if (name === 'genreSelect') {
+                    if (value === 'add-new') {
+                        setIsEditingNewGenre(true);
+                        setEditFormData(prev => ({ ...prev, genre: '' }));
+                    } else {
+                        setIsEditingNewGenre(false);
+                        setEditFormData(prev => ({ ...prev, genre: value }));
+                    }
+                } else {
+                    setEditFormData(prev => ({ ...prev, [name]: value }));
+                }
             };
 
 
@@ -1003,7 +1020,14 @@
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                                    <input type="text" name="genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    <select name="genreSelect" value={isEditingNewGenre ? 'add-new' : editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white">
+                                                        <option value={editFormData.genre} disabled>{editFormData.genre}</option>
+                                                        {(editFormData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                                        <option value="add-new">--- Add New Genre ---</option>
+                                                    </select>
+                                                    {isEditingNewGenre && (
+                                                        <input type="text" name="genre" placeholder="New Genre" value={editFormData.genre} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"/>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Date Read</label>
