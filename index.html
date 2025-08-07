@@ -242,7 +242,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.34</span>
+                        <span className="font-mono text-xs text-gray-500">v0.35</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -825,6 +825,8 @@
             const [editFormData, setEditFormData] = useState({});
             const [lightboxBook, setLightboxBook] = useState(null);
             const [isEditingNewGenre, setIsEditingNewGenre] = useState(false);
+            const [isBulkEditing, setIsBulkEditing] = useState(false);
+            const [bulkEditData, setBulkEditData] = useState([]);
             
             const draggedItem = useRef(null);
 
@@ -842,6 +844,9 @@
             useEffect(() => {
                 const filtered = books.filter(b => selectedYears.includes(b.readYear));
                 setDisplayedBooks(filtered);
+                if (isBulkEditing) {
+                    setBulkEditData(filtered);
+                }
             }, [books, selectedYears]);
 
             useEffect(() => {
@@ -950,6 +955,24 @@
                 }
             };
 
+            const handleBulkEditChange = (index, field, value) => {
+                const updatedData = [...bulkEditData];
+                updatedData[index][field] = value;
+                setBulkEditData(updatedData);
+            };
+
+            const handleSaveBulkEdit = async () => {
+                const batch = writeBatch(db);
+                bulkEditData.forEach(book => {
+                    const bookRef = doc(db, "readings", book.id);
+                    const { id, ...dataToSave } = book;
+                    batch.update(bookRef, dataToSave);
+                });
+                await batch.commit();
+                setIsBulkEditing(false);
+                onBookUpdated();
+            };
+
 
             if (loading) return <p>Loading books...</p>;
             
@@ -961,12 +984,24 @@
                     <Lightbox book={lightboxBook} onClose={() => setLightboxBook(null)} />
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Books Read This Year</h2>
-                         <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                            <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                            <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                         <div className="flex items-center gap-2">
+                             <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                             </div>
+                             {viewMode === 'list' && (
+                                <button onClick={() => { setIsBulkEditing(true); setBulkEditData(displayedBooks); }} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                             )}
                          </div>
                     </div>
                     
+                    {isBulkEditing && (
+                        <div className="flex justify-end gap-2 mb-4">
+                            <button onClick={handleSaveBulkEdit} className="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-md">Save All Changes</button>
+                            <button onClick={() => setIsBulkEditing(false)} className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md">Cancel</button>
+                        </div>
+                    )}
+
                     <div className="mb-6">
                         <div className="flex flex-wrap gap-2">
                             {allYears.map(year => (
@@ -1014,7 +1049,28 @@
                                 <tbody>
                                 {displayedBooks.map((book, index) => {
                                     const isEditing = editingBookId === book.id;
-                                    return isEditing ? (
+                                    return isBulkEditing ? (
+                                        <tr key={book.id}><td colSpan="9" className="p-0"><div className="p-3 bg-gray-700 rounded-lg space-y-3">
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Title</label>
+                                                    <input type="text" value={bulkEditData[index]?.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Country</label>
+                                                    <input type="text" value={bulkEditData[index]?.country || ''} onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                                    <input type="text" value={bulkEditData[index]?.genre || ''} onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                                    <input type="number" value={bulkEditData[index]?.pageCount || 0} onChange={(e) => handleBulkEditChange(index, 'pageCount', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                            </div>
+                                        </div></td></tr>
+                                    ) : isEditing ? (
                                         <tr key={book.id}><td colSpan="9" className="p-0"><div className="p-3 bg-indigo-900 rounded-lg space-y-3">
                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                 <div>
