@@ -223,8 +223,8 @@
                 <div className="p-4 md:p-8">
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
-                        {view === 'add-single' && <AddBook onBookAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
-                        {view === 'add-multiple' && <AddMultipleBooks onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add-single' && <AddBook books={books} onBookAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
                         {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} />}
                         {view === 'search' && <Search books={books} onCancel={() => setView('gallery')} />}
@@ -242,7 +242,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.27</span>
+                        <span className="font-mono text-xs text-gray-500">v0.28</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -260,13 +260,17 @@
         }
 
         // --- Add Single Book Component ---
-        function AddBook({ onBookAdded, onCancel }) {
+        function AddBook({ books, onBookAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
             const [readMonth, setReadMonth] = useState(new Date().getMonth());
             const [readYear, setReadYear] = useState(new Date().getFullYear());
+            const [isAddingNewGenre, setIsAddingNewGenre] = useState(false);
+
+            const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
+            const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
 
             const handleIsbnSearch = async (e) => {
                 e.preventDefault();
@@ -327,7 +331,17 @@
             
             const handleBookDataChange = (e) => {
                 const { name, value } = e.target;
-                setBookData(prev => ({ ...prev, [name]: value }));
+                if (name === 'genreSelect') {
+                    if (value === 'add-new') {
+                        setIsAddingNewGenre(true);
+                        setBookData(prev => ({ ...prev, genre: '' }));
+                    } else {
+                        setIsAddingNewGenre(false);
+                        setBookData(prev => ({ ...prev, genre: value }));
+                    }
+                } else {
+                    setBookData(prev => ({ ...prev, [name]: value }));
+                }
             };
 
             return (
@@ -383,7 +397,14 @@
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                        <input type="text" name="genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                        <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                            <option value={bookData.genre} disabled>{bookData.genre}</option>
+                                            {(bookData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                            <option value="add-new">--- Add New Genre ---</option>
+                                        </select>
+                                        {isAddingNewGenre && (
+                                            <input type="text" name="genre" placeholder="New Genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-400">Author's Country</label>
@@ -399,11 +420,14 @@
         }
 
         // --- Add Multiple Books Component ---
-        function AddMultipleBooks({ onBooksAdded, onCancel }) {
+        function AddMultipleBooks({ books, onBooksAdded, onCancel }) {
             const [isbnList, setIsbnList] = useState('');
             const [foundBooks, setFoundBooks] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
+
+            const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
+            const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
 
             const handleFindBooks = async (e) => {
                 e.preventDefault();
@@ -444,7 +468,7 @@
                     });
 
                     const results = await Promise.all(bookPromises);
-                    setFoundBooks(results);
+                    setFoundBooks(results.map(b => ({...b, isAddingNewGenre: false })));
 
                 } catch (err) {
                     setError('An error occurred while fetching book data.');
@@ -454,7 +478,17 @@
 
             const handleBookDataChange = (index, field, value) => {
                 const updatedBooks = [...foundBooks];
-                updatedBooks[index][field] = value;
+                if (field === 'genreSelect') {
+                    if (value === 'add-new') {
+                        updatedBooks[index].isAddingNewGenre = true;
+                        updatedBooks[index].genre = '';
+                    } else {
+                        updatedBooks[index].isAddingNewGenre = false;
+                        updatedBooks[index].genre = value;
+                    }
+                } else {
+                    updatedBooks[index][field] = value;
+                }
                 setFoundBooks(updatedBooks);
             };
             
@@ -545,7 +579,14 @@
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                                    <input type="text" value={book.genre} onChange={e => handleBookDataChange(index, 'genre', e.target.value)} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    <select name="genreSelect" value={book.isAddingNewGenre ? 'add-new' : book.genre} onChange={e => handleBookDataChange(index, 'genreSelect', e.target.value)} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-white">
+                                                        <option value={book.genre} disabled>{book.genre}</option>
+                                                        {(book.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                                        <option value="add-new">--- Add New Genre ---</option>
+                                                    </select>
+                                                    {book.isAddingNewGenre && (
+                                                        <input type="text" placeholder="New Genre" value={book.genre} onChange={e => handleBookDataChange(index, 'genre', e.target.value)} className="w-full p-2 mt-2 bg-gray-500 rounded-md text-white"/>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
