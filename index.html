@@ -242,7 +242,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.28</span>
+                        <span className="font-mono text-xs text-gray-500">v0.30</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -655,17 +655,24 @@
                     }
                     return acc;
                 }, {});
+                
+                const booksByCountry = filteredBooks.reduce((acc, book) => {
+                    if (book.country) {
+                        acc[book.country] = (acc[book.country] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
 
 
                 return {
                     total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, genreCounts,
                     mostReadAuthor: mostReadAuthor ? `${mostReadAuthor[0]} (${mostReadAuthor[1]} books)` : 'N/A',
-                    monthlyCounts, pagesPerMonth, averagePageCount, shortestBook, longestBook, uniqueAuthors, booksByDecade
+                    monthlyCounts, pagesPerMonth, averagePageCount, shortestBook, longestBook, uniqueAuthors, booksByDecade, booksByCountry
                 };
             }, [year, books]);
 
             useEffect(() => {
-                let pieChart, barChart, lineChart, decadeChart;
+                let pieChart, barChart, lineChart, decadeChart, countryChart;
                 const chartInstances = [];
 
                 if (stats) {
@@ -724,6 +731,19 @@
                         });
                         chartInstances.push(decadeChart);
                     }
+                    
+                    const countryCtx = document.getElementById('country-chart')?.getContext('2d');
+                    if (countryCtx) {
+                        countryChart = new Chart(countryCtx, {
+                            type: 'pie',
+                            data: {
+                                labels: Object.keys(stats.booksByCountry),
+                                datasets: [{ data: Object.values(stats.booksByCountry) }]
+                            },
+                            options: { plugins: { legend: { labels: { color: 'white' }}}}
+                        });
+                        chartInstances.push(countryChart);
+                    }
                 }
 
                 return () => {
@@ -753,12 +773,13 @@
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Authors</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueAuthors}</p></div>
                             
                             <div className="md:col-span-2 p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Most Read Author</h3><p className="text-3xl font-bold text-indigo-400">{stats.mostReadAuthor}</p></div>
-                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.shortestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Shortest Book</h3><p className="text-xl font-bold text-indigo-400 truncate">{stats.shortestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p></div></div>
-                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.longestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Longest Book</h3><p className="text-xl font-bold text-indigo-400 truncate">{stats.longestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p></div></div>
+                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.shortestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Shortest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.shortestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p></div></div>
+                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.longestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Longest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.longestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p></div></div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Fiction vs. Non-Fiction</h3><canvas id="pie-chart"></canvas></div>
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Books by Decade</h3><canvas id="decade-chart"></canvas></div>
-                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2 lg:col-span-4"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Books by Country</h3><canvas id="country-chart"></canvas></div>
+                            <div className="p-4 bg-gray-800 rounded-lg md:col-span-2"><h3 className="font-bold text-lg mb-2">Top Genres</h3><canvas id="bar-chart"></canvas></div>
 
                             {year !== 'All Time' && (
                                 <div className="p-4 bg-gray-800 rounded-lg md:col-span-2 lg:col-span-4">
