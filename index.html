@@ -242,7 +242,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.31</span>
+                        <span className="font-mono text-xs text-gray-500">v0.33</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -844,6 +844,12 @@
                 setDisplayedBooks(filtered);
             }, [books, selectedYears]);
 
+            useEffect(() => {
+                if (viewMode === 'list' && selectedYears.length > 1) {
+                    setSelectedYears([Math.max(...selectedYears)]);
+                }
+            }, [viewMode]);
+
             const handleYearToggle = (year) => {
                 if (viewMode === 'list') {
                     setSelectedYears([year]);
@@ -995,14 +1001,14 @@
                                 {/* Header */}
                                 <div className="hidden md:grid grid-cols-12 gap-4 px-3 py-2 text-xs font-bold text-gray-400 uppercase">
                                     <div className="col-span-1 text-center">#</div>
-                                    <div className="col-span-2">Title</div>
+                                    <div className="col-span-3">Title</div>
                                     <div className="col-span-2">Author</div>
                                     <div className="col-span-1">Country</div>
                                     <div className="col-span-1">Type</div>
-                                    <div className="col-span-2">Genre</div>
+                                    <div className="col-span-1">Genre</div>
                                     <div className="col-span-1">Month</div>
                                     <div className="col-span-1">Pages</div>
-                                    <div className="col-span-1"></div>
+                                    <div className="col-span-1 text-right">Actions</div>
                                 </div>
                                 {/* Body */}
                                 {displayedBooks.map((book, index) => {
@@ -1062,14 +1068,14 @@
                                             onDrop={handleDrop}
                                         >
                                             <div className="col-span-1 text-center font-bold text-gray-400">{index + 1}</div>
-                                            <div className="col-span-3 flex items-center gap-4">
+                                            <div className="col-span-2 flex items-center gap-4">
                                                 <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0 hidden md:block"/>
                                                 <span className="font-bold text-white">{book.title}</span>
                                             </div>
                                             <div className="col-span-2 text-sm text-gray-400">{book.author}</div>
                                             <div className="col-span-1 text-sm text-gray-400">{book.country || 'N/A'}</div>
                                             <div className="col-span-1 text-sm text-gray-400">{book.isFiction ? 'Fiction' : 'Non-Fiction'}</div>
-                                            <div className="col-span-1 text-sm text-gray-400">{book.genre}</div>
+                                            <div className="col-span-2 text-sm text-gray-400">{book.genre}</div>
                                             <div className="col-span-1 text-sm text-gray-400">{new Date(book.readDate).toLocaleDateString('en-US', { month: 'short' })}</div>
                                             <div className="col-span-1 text-sm text-gray-400">{book.pageCount > 0 ? book.pageCount : 'N/A'}</div>
                                             <div className="col-span-1 flex justify-end gap-2">
