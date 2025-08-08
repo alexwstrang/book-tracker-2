@@ -1114,10 +1114,14 @@
                                     const isEditing = editingBookId === book.id;
                                     return isBulkEditing ? (
                                         <tr key={book.id}><td colSpan="9" className="p-0"><div className="p-3 bg-gray-700 rounded-lg space-y-3">
-                                            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                                                 <div className="md:col-span-2">
                                                     <label className="block text-xs font-medium text-gray-400">Title</label>
                                                     <input type="text" value={bulkEditData[index]?.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Country</label>
+                                                    <input type="text" value={bulkEditData[index]?.country || ''} onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Type</label>
