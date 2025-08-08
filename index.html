@@ -252,7 +252,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.42</span>
+                        <span className="font-mono text-xs text-gray-500">v0.45</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -858,7 +858,7 @@
                     // Refresh bulk edit data if the underlying books list changes
                     const dataForEditing = filtered.map(book => {
                         const date = new Date(book.readDate);
-                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear() };
+                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false };
                     });
                     setBulkEditData(dataForEditing);
                 }
@@ -979,6 +979,7 @@
                             ...book,
                             readMonth: date.getMonth(),
                             readYear: date.getFullYear(),
+                            isAddingNewGenre: false,
                         };
                     });
                     setBulkEditData(dataForEditing);
@@ -988,7 +989,28 @@
 
             const handleBulkEditChange = (index, field, value) => {
                 const updatedData = [...bulkEditData];
-                updatedData[index][field] = value;
+                
+                if (field === 'genreSelect') {
+                    if (value === 'add-new') {
+                        updatedData[index].isAddingNewGenre = true;
+                        updatedData[index].genre = '';
+                    } else {
+                        updatedData[index].isAddingNewGenre = false;
+                        updatedData[index].genre = value;
+                    }
+                } else if (field === 'isFiction') {
+                    const isFiction = value === 'true';
+                    updatedData[index].isFiction = isFiction;
+                    // When type changes, reset genre if it's not in the new list
+                    const newGenreList = isFiction ? fictionGenres : nonFictionGenres;
+                    if (!newGenreList.includes(updatedData[index].genre)) {
+                        updatedData[index].genre = ''; 
+                    }
+                }
+                else {
+                    updatedData[index][field] = value;
+                }
+                
                 setBulkEditData(updatedData);
             };
 
@@ -1000,11 +1022,9 @@
                     const newReadDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                     
                     // Create a clean object with only the fields we want to save
+                    const { id, readMonth, isAddingNewGenre, ...dataToSave } = book;
                     const updatedData = {
-                        title: book.title,
-                        isFiction: book.isFiction,
-                        country: book.country,
-                        genre: book.genre,
+                        ...dataToSave,
                         pageCount: Number(book.pageCount),
                         readDate: newReadDate,
                         readYear: Number(book.readYear),
@@ -1103,12 +1123,33 @@
                                                     <label className="block text-xs font-medium text-gray-400">Type</label>
                                                     <select
                                                         value={bulkEditData[index]?.isFiction}
-                                                        onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value === 'true')}
+                                                        onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value)}
                                                         className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
                                                     >
                                                         <option value={true}>Fiction</option>
                                                         <option value={false}>Non-Fiction</option>
                                                     </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                                    <select
+                                                        value={bulkEditData[index]?.isAddingNewGenre ? 'add-new' : bulkEditData[index]?.genre}
+                                                        onChange={(e) => handleBulkEditChange(index, 'genreSelect', e.target.value)}
+                                                        className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                                    >
+                                                        <option value={bulkEditData[index]?.genre} disabled>{bulkEditData[index]?.genre || 'Select Genre'}</option>
+                                                        {(bulkEditData[index]?.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                                        <option value="add-new">--- Add New ---</option>
+                                                    </select>
+                                                    {bulkEditData[index]?.isAddingNewGenre && (
+                                                        <input
+                                                            type="text"
+                                                            placeholder="New Genre"
+                                                            value={bulkEditData[index]?.genre}
+                                                            onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)}
+                                                            className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                                        />
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Date Read</label>
@@ -1127,10 +1168,6 @@
                                                             className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"
                                                         />
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                                    <input type="text" value={bulkEditData[index]?.genre || ''} onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Pages</label>
