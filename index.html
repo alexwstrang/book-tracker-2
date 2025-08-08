@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book Tracker</title>
     
+    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
+    <!-- Babel to translate JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -37,6 +41,7 @@
 <body>
     <div id="root"></div>
 
+    <!-- The entire React Application -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
@@ -997,6 +1002,7 @@
                     // Create a clean object with only the fields we want to save
                     const updatedData = {
                         title: book.title,
+                        isFiction: book.isFiction,
                         country: book.country,
                         genre: book.genre,
                         pageCount: Number(book.pageCount),
@@ -1088,10 +1094,21 @@
                                     const isEditing = editingBookId === book.id;
                                     return isBulkEditing ? (
                                         <tr key={book.id}><td colSpan="9" className="p-0"><div className="p-3 bg-gray-700 rounded-lg space-y-3">
-                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                                                 <div className="md:col-span-2">
                                                     <label className="block text-xs font-medium text-gray-400">Title</label>
                                                     <input type="text" value={bulkEditData[index]?.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-400">Type</label>
+                                                    <select
+                                                        value={bulkEditData[index]?.isFiction}
+                                                        onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value === 'true')}
+                                                        className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                                    >
+                                                        <option value={true}>Fiction</option>
+                                                        <option value={false}>Non-Fiction</option>
+                                                    </select>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Date Read</label>
