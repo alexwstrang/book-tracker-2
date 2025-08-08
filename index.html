@@ -252,7 +252,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.45</span>
+                        <span className="font-mono text-xs text-gray-500">v0.46</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -848,6 +848,7 @@
             
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
+            const allCountries = useMemo(() => [...new Set(books.map(b => b.country).filter(Boolean))].sort(), [books]);
 
             const [selectedYears, setSelectedYears] = useState([new Date().getFullYear()]);
 
@@ -858,7 +859,7 @@
                     // Refresh bulk edit data if the underlying books list changes
                     const dataForEditing = filtered.map(book => {
                         const date = new Date(book.readDate);
-                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false };
+                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false, isAddingNewCountry: false };
                     });
                     setBulkEditData(dataForEditing);
                 }
@@ -980,6 +981,7 @@
                             readMonth: date.getMonth(),
                             readYear: date.getFullYear(),
                             isAddingNewGenre: false,
+                            isAddingNewCountry: false,
                         };
                     });
                     setBulkEditData(dataForEditing);
@@ -997,6 +999,14 @@
                     } else {
                         updatedData[index].isAddingNewGenre = false;
                         updatedData[index].genre = value;
+                    }
+                } else if (field === 'countrySelect') {
+                    if (value === 'add-new') {
+                        updatedData[index].isAddingNewCountry = true;
+                        updatedData[index].country = '';
+                    } else {
+                        updatedData[index].isAddingNewCountry = false;
+                        updatedData[index].country = value;
                     }
                 } else if (field === 'isFiction') {
                     const isFiction = value === 'true';
@@ -1022,7 +1032,7 @@
                     const newReadDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                     
                     // Create a clean object with only the fields we want to save
-                    const { id, readMonth, isAddingNewGenre, ...dataToSave } = book;
+                    const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
                     const updatedData = {
                         ...dataToSave,
                         pageCount: Number(book.pageCount),
@@ -1121,7 +1131,24 @@
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Country</label>
-                                                    <input type="text" value={bulkEditData[index]?.country || ''} onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    <select
+                                                        value={bulkEditData[index]?.isAddingNewCountry ? 'add-new' : bulkEditData[index]?.country}
+                                                        onChange={(e) => handleBulkEditChange(index, 'countrySelect', e.target.value)}
+                                                        className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                                    >
+                                                        <option value={bulkEditData[index]?.country} disabled>{bulkEditData[index]?.country || 'Select Country'}</option>
+                                                        {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                                                        <option value="add-new">--- Add New ---</option>
+                                                    </select>
+                                                    {bulkEditData[index]?.isAddingNewCountry && (
+                                                        <input
+                                                            type="text"
+                                                            placeholder="New Country"
+                                                            value={bulkEditData[index]?.country}
+                                                            onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)}
+                                                            className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                                        />
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Type</label>
