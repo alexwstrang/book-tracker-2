@@ -5,17 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book Tracker</title>
     
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Babel to translate JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -41,7 +37,6 @@
 <body>
     <div id="root"></div>
 
-    <!-- The entire React Application -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
@@ -855,9 +850,14 @@
                 const filtered = books.filter(b => selectedYears.includes(b.readYear));
                 setDisplayedBooks(filtered);
                 if (isBulkEditing) {
-                    setBulkEditData(filtered);
+                    // Refresh bulk edit data if the underlying books list changes
+                    const dataForEditing = filtered.map(book => {
+                        const date = new Date(book.readDate);
+                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear() };
+                    });
+                    setBulkEditData(dataForEditing);
                 }
-            }, [books, selectedYears]);
+            }, [books, selectedYears, isBulkEditing]);
 
             useEffect(() => {
                 if (viewMode === 'list' && selectedYears.length > 1) {
@@ -965,6 +965,22 @@
                 }
             };
 
+            const toggleBulkEdit = () => {
+                if (!isBulkEditing) {
+                    // When starting an edit, create a new data set with derived month/year
+                    const dataForEditing = displayedBooks.map(book => {
+                        const date = new Date(book.readDate);
+                        return {
+                            ...book,
+                            readMonth: date.getMonth(),
+                            readYear: date.getFullYear(),
+                        };
+                    });
+                    setBulkEditData(dataForEditing);
+                }
+                setIsBulkEditing(!isBulkEditing);
+            };
+
             const handleBulkEditChange = (index, field, value) => {
                 const updatedData = [...bulkEditData];
                 updatedData[index][field] = value;
@@ -975,8 +991,19 @@
                 const batch = writeBatch(db);
                 bulkEditData.forEach(book => {
                     const bookRef = doc(db, "readings", book.id);
-                    const { id, ...dataToSave } = book;
-                    batch.update(bookRef, dataToSave);
+                    // Reconstruct the readDate from the edited month and year
+                    const newReadDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
+                    
+                    // Create a clean object with only the fields we want to save
+                    const updatedData = {
+                        title: book.title,
+                        country: book.country,
+                        genre: book.genre,
+                        pageCount: Number(book.pageCount),
+                        readDate: newReadDate,
+                        readYear: Number(book.readYear),
+                    };
+                    batch.update(bookRef, updatedData);
                 });
                 await batch.commit();
                 setIsBulkEditing(false);
@@ -993,14 +1020,14 @@
                 <div>
                     <Lightbox book={lightboxBook} onClose={() => setLightboxBook(null)} />
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Books Read This Year</h2>
+                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
                          <div className="flex items-center gap-2">
                              <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                 <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
                              </div>
-                             {viewMode === 'list' && (
-                                <button onClick={() => { setIsBulkEditing(true); setBulkEditData(displayedBooks); }} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                             {viewMode === 'list' && !isBulkEditing && (
+                                 <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
                              )}
                          </div>
                     </div>
@@ -1008,7 +1035,7 @@
                     {isBulkEditing && (
                         <div className="flex justify-end gap-2 mb-4">
                             <button onClick={handleSaveBulkEdit} className="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-md">Save All Changes</button>
-                            <button onClick={() => setIsBulkEditing(false)} className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md">Cancel</button>
+                            <button onClick={toggleBulkEdit} className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md">Cancel</button>
                         </div>
                     )}
 
@@ -1061,14 +1088,28 @@
                                     const isEditing = editingBookId === book.id;
                                     return isBulkEditing ? (
                                         <tr key={book.id}><td colSpan="9" className="p-0"><div className="p-3 bg-gray-700 rounded-lg space-y-3">
-                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                <div>
+                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                                <div className="md:col-span-2">
                                                     <label className="block text-xs font-medium text-gray-400">Title</label>
                                                     <input type="text" value={bulkEditData[index]?.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Country</label>
-                                                    <input type="text" value={bulkEditData[index]?.country || ''} onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)} className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                    <label className="block text-xs font-medium text-gray-400">Date Read</label>
+                                                    <div className="flex gap-1 mt-1">
+                                                        <select
+                                                            value={bulkEditData[index]?.readMonth ?? 0}
+                                                            onChange={(e) => handleBulkEditChange(index, 'readMonth', parseInt(e.target.value))}
+                                                            className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"
+                                                        >
+                                                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                        </select>
+                                                        <input
+                                                            type="number"
+                                                            value={bulkEditData[index]?.readYear ?? new Date().getFullYear()}
+                                                            onChange={(e) => handleBulkEditChange(index, 'readYear', parseInt(e.target.value))}
+                                                            className="w-full p-1 bg-gray-600 rounded-md text-sm text-white"
+                                                        />
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
@@ -1243,4 +1284,3 @@
     </script>
 </body>
 </html>
-
