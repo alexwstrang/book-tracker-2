@@ -1,3 +1,10 @@
+Excellent idea. That simplifies the interface and provides a much more intuitive way to view the whole collection.
+
+Here’s the complete code with those changes. I've updated the `BooksDisplay` component to remove multi-year selection, add an "All Time" button, and ensure everything sorts correctly. The "Bulk Edit" button will also now be hidden when "All Time" is selected to prevent editing a potentially massive list.
+
+You can replace your entire HTML file with the code below.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,17 +12,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book Tracker</title>
     
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Babel to translate JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -41,7 +44,6 @@
 <body>
     <div id="root"></div>
 
-    <!-- The entire React Application -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
@@ -986,50 +988,53 @@
             const [isEditingNewGenre, setIsEditingNewGenre] = useState(false);
             const [isBulkEditing, setIsBulkEditing] = useState(false);
             const [bulkEditData, setBulkEditData] = useState([]);
+            const [selectedPeriod, setSelectedPeriod] = useState(new Date().getFullYear()); // Can be a year (number) or 'All Time' (string)
             
             const draggedItem = useRef(null);
-
-            const allYears = useMemo(() => {
+            
+            const availablePeriods = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
                 for (let y = new Date().getFullYear(); y >= 2014; y--) years.add(y);
-                return Array.from(years).sort((a, b) => b - a);
+                return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
             }, [books]);
             
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
             const allCountries = useMemo(() => [...new Set(books.map(b => b.country).filter(Boolean))].sort(), [books]);
 
-            const [selectedYears, setSelectedYears] = useState([new Date().getFullYear()]);
-
             useEffect(() => {
-                const filtered = books.filter(b => selectedYears.includes(b.readYear));
-                setDisplayedBooks(filtered);
-                if (isBulkEditing) {
-                    // Refresh bulk edit data if the underlying books list changes
-                    const dataForEditing = filtered.map(book => {
+                let filteredBooks;
+
+                // 1. Filter the books based on the selected period
+                if (selectedPeriod === 'All Time') {
+                    filteredBooks = [...books]; // Use a copy of all books
+                } else {
+                    filteredBooks = books.filter(b => b.readYear === selectedPeriod);
+                }
+
+                // 2. Sort the filtered list
+                if (selectedPeriod === 'All Time') {
+                    // For "All Time" view, always sort chronologically by the full read date
+                    filteredBooks.sort((a, b) => new Date(a.readDate) - new Date(b.readDate));
+                }
+                // For a single year, we rely on the default sort (by orderIndex) from the main `books` array.
+
+                setDisplayedBooks(filteredBooks);
+
+                if (isBulkEditing && selectedPeriod !== 'All Time') {
+                    const dataForEditing = filteredBooks.map(book => {
                         const date = new Date(book.readDate);
                         return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false, isAddingNewCountry: false };
                     });
                     setBulkEditData(dataForEditing);
+                } else if (isBulkEditing && selectedPeriod === 'All Time') {
+                    // If user switches to "All Time" during bulk edit, cancel it.
+                    setIsBulkEditing(false);
                 }
-            }, [books, selectedYears, isBulkEditing]);
-
-            useEffect(() => {
-                if (viewMode === 'list' && selectedYears.length > 1) {
-                    setSelectedYears([Math.max(...selectedYears)]);
-                }
-            }, [viewMode]);
-
-            const handleYearToggle = (year) => {
-                if (viewMode === 'list') {
-                    setSelectedYears([year]);
-                } else { // viewMode is 'gallery'
-                    setSelectedYears(prev => 
-                        prev.includes(year) 
-                            ? prev.filter(y => y !== year) 
-                            : [...prev, year]
-                    );
-                }
+            }, [books, selectedPeriod, isBulkEditing]);
+            
+            const handlePeriodSelect = (period) => {
+                setSelectedPeriod(period);
             };
             
             const deleteBook = async (bookId) => {
@@ -1122,7 +1127,6 @@
 
             const toggleBulkEdit = () => {
                 if (!isBulkEditing) {
-                    // When starting an edit, create a new data set with derived month/year
                     const dataForEditing = displayedBooks.map(book => {
                         const date = new Date(book.readDate);
                         return {
@@ -1160,7 +1164,6 @@
                 } else if (field === 'isFiction') {
                     const isFiction = value === 'true';
                     updatedData[index].isFiction = isFiction;
-                    // When type changes, reset genre if it's not in the new list
                     const newGenreList = isFiction ? fictionGenres : nonFictionGenres;
                     if (!newGenreList.includes(updatedData[index].genre)) {
                         updatedData[index].genre = ''; 
@@ -1177,10 +1180,7 @@
                 const batch = writeBatch(db);
                 bulkEditData.forEach(book => {
                     const bookRef = doc(db, "readings", book.id);
-                    // Reconstruct the readDate from the edited month and year
                     const newReadDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
-                    
-                    // Create a clean object with only the fields we want to save
                     const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
                     const updatedData = {
                         ...dataToSave,
@@ -1211,7 +1211,7 @@
                                  <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
                                  <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
                              </div>
-                             {viewMode === 'list' && !isBulkEditing && (
+                             {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
                                  <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
                              )}
                          </div>
@@ -1226,20 +1226,20 @@
 
                     <div className="mb-6">
                         <div className="flex flex-wrap gap-2">
-                            {allYears.map(year => (
+                            {availablePeriods.map(period => (
                                 <button
-                                    key={year}
-                                    onClick={() => handleYearToggle(year)}
-                                    className={`px-4 py-2 rounded-full text-sm font-medium transition ${selectedYears.includes(year) ? 'bg-indigo-500 text-white' : 'bg-gray-700 text-gray-300'}`}
+                                    key={period}
+                                    onClick={() => handlePeriodSelect(period)}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition ${selectedPeriod === period ? 'bg-indigo-500 text-white' : 'bg-gray-700 text-gray-300'}`}
                                 >
-                                    {year}
+                                    {period}
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     {displayedBooks.length === 0 ? (
-                         <p className="text-gray-400">No books found for the selected year(s).</p>
+                         <p className="text-gray-400">No books found for the selected period.</p>
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                             {displayedBooks.map(book => (
@@ -1408,7 +1408,7 @@
                                         <tr 
                                             key={book.id} 
                                             className="bg-gray-800 cursor-grab"
-                                            draggable
+                                            draggable={selectedPeriod !== 'All Time'}
                                             onDragStart={(e) => handleDragStart(e, index)}
                                             onDragOver={(e) => handleDragOver(e, index)}
                                             onDrop={handleDrop}
@@ -1522,3 +1522,4 @@
     </script>
 </body>
 </html>
+```
