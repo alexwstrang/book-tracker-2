@@ -950,12 +950,10 @@
                                 datasets: [{ data: Object.values(stats.booksByCountry) }]
                             },
                             options: {
-                                onClick: (event, elements) => {
+                                onClick: (event, elements, chart) => {
                                     if (elements.length > 0) {
-                                        const chart = elements[0].chart;
                                         const elementIndex = elements[0].index;
                                         const clickedCountry = chart.data.labels[elementIndex];
-                                        
                                         const booksFromCountry = books.filter(book => book.country === clickedCountry);
                                         
                                         setModalData({
@@ -977,7 +975,9 @@
                 }
 
                 return () => {
-                    chartInstances.forEach(chart => chart.destroy());
+                    chartInstances.forEach(chart => {
+                        if (chart) chart.destroy();
+                    });
                 };
             }, [stats, books]);
 
