@@ -247,7 +247,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.52</span>
+                        <span className="font-mono text-xs text-gray-500">v0.53</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -753,10 +753,42 @@
                 </div>
             );
         }
+        
+        // --- Country Books Modal Component ---
+        function CountryBooksModal({ isOpen, country, books, onClose }) {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-white">Books from {country}</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
+                            {books.length > 0 ? books.map(book => (
+                                <div key={book.id} className="flex items-center gap-4 p-3 bg-gray-700 rounded-lg">
+                                    <img src={book.coverUrl} alt={book.title} className="w-12 h-20 object-cover rounded-md flex-shrink-0"/>
+                                    <div>
+                                        <p className="font-bold text-white">{book.title}</p>
+                                        <p className="text-sm text-gray-300">{book.author}</p>
+                                        <p className="text-xs text-gray-500">Read in {new Date(book.readDate).getFullYear()}</p>
+                                    </div>
+                                </div>
+                            )) : (
+                                <p className="text-gray-400">No books found for this country.</p>
+                            )}
+                        </div>
+                        <button onClick={onClose} className="mt-2 ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+                    </div>
+                </div>
+            );
+        }
 
         // --- Stats Component ---
         function Stats({ books, loading }) {
             const [year, setYear] = useState('All Time');
+            const [modalData, setModalData] = useState({ isOpen: false, country: '', books: [] });
             
             const availableYears = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
@@ -917,7 +949,28 @@
                                 labels: Object.keys(stats.booksByCountry),
                                 datasets: [{ data: Object.values(stats.booksByCountry) }]
                             },
-                            options: { plugins: { legend: { labels: { color: 'white' }}}}
+                            options: {
+                                onClick: (event, elements) => {
+                                    if (elements.length > 0) {
+                                        const chart = elements[0].chart;
+                                        const elementIndex = elements[0].index;
+                                        const clickedCountry = chart.data.labels[elementIndex];
+                                        
+                                        const booksFromCountry = books.filter(book => book.country === clickedCountry);
+                                        
+                                        setModalData({
+                                            isOpen: true,
+                                            country: clickedCountry,
+                                            books: booksFromCountry
+                                        });
+                                    }
+                                },
+                                onHover: (event, chartElement) => {
+                                    const canvas = event.native.target;
+                                    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                                },
+                                plugins: { legend: { labels: { color: 'white' }}}
+                            }
                         });
                         chartInstances.push(countryChart);
                     }
@@ -926,13 +979,20 @@
                 return () => {
                     chartInstances.forEach(chart => chart.destroy());
                 };
-            }, [stats]);
+            }, [stats, books]);
 
+            const handleCloseModal = () => setModalData({ isOpen: false, country: '', books: [] });
 
             if (loading) return <p>Loading stats...</p>;
 
             return (
                 <div>
+                    <CountryBooksModal
+                        isOpen={modalData.isOpen}
+                        country={modalData.country}
+                        books={modalData.books}
+                        onClose={handleCloseModal}
+                    />
                     <div className="flex items-center gap-4 mb-6">
                         <h2 className="text-2xl font-bold">Statistics for</h2>
                         <select value={year} onChange={e => setYear(e.target.value === 'All Time' ? 'All Time' : Number(e.target.value))} className="p-2 bg-gray-700 rounded-md">
@@ -1540,4 +1600,3 @@
     </script>
 </body>
 </html>
-```
