@@ -284,7 +284,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.61</span>
+                        <span className="font-mono text-xs text-gray-500">v0.62</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -558,7 +558,7 @@
                                  <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                              </div>
                              <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add to Library</button>
-                          </form>
+                         </form>
                     )}
 
                     {bookData && !isManualAdd && (
@@ -812,7 +812,7 @@
                                     )}
                                 </div>
                             ))}
-                             <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All to Library</button>
+                                <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All to Library</button>
                         </div>
                     )}
                 </div>
@@ -850,10 +850,42 @@
             );
         }
 
-        // --- Stats Component ---
+        // --- Decade Books Modal Component (NEW) ---
+        function DecadeBooksModal({ isOpen, decade, books, onClose }) {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-white">Books from the {decade}</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
+                            {books.length > 0 ? books.map(book => (
+                                <div key={book.id} className="flex items-center gap-4 p-3 bg-gray-700 rounded-lg">
+                                    <img src={book.coverUrl} alt={book.title} className="w-12 h-20 object-cover rounded-md flex-shrink-0"/>
+                                    <div>
+                                        <p className="font-bold text-white">{book.title}</p>
+                                        <p className="text-sm text-gray-300">{book.author}</p>
+                                        <p className="text-xs text-gray-500">Published in {book.publicationYear}</p>
+                                    </div>
+                                </div>
+                            )) : (
+                                <p className="text-gray-400">No books found for this decade.</p>
+                            )}
+                        </div>
+                        <button onClick={onClose} className="mt-2 ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Stats Component (UPDATED)---
         function Stats({ books, loading }) {
             const [year, setYear] = useState('All Time');
             const [modalData, setModalData] = useState({ isOpen: false, country: '', books: [] });
+            const [decadeModalData, setDecadeModalData] = useState({ isOpen: false, decade: '', books: [] });
             
             const availableYears = useMemo(() => {
                 const years = new Set(books.map(b => b.readYear));
@@ -909,7 +941,7 @@
                 }
                 
                 const booksByDecade = filteredBooks.reduce((acc, book) => {
-                    if (book.publicationYear) {
+                    if (book.publicationYear && !isNaN(book.publicationYear)) {
                         const decade = Math.floor(book.publicationYear / 10) * 10;
                         acc[decade] = (acc[decade] || 0) + 1;
                     }
@@ -1001,7 +1033,29 @@
                                 labels: sortedDecades.map(d => `${d}s`),
                                 datasets: [{ label: 'Books by Decade', data: sortedDecades.map(d => stats.booksByDecade[d]), backgroundColor: '#818cf8' }]
                             },
-                            options: { scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false }} }
+                            options: {
+                                onClick: (event, elements, chart) => {
+                                    if (elements.length > 0) {
+                                        const elementIndex = elements[0].index;
+                                        const clickedDecadeLabel = chart.data.labels[elementIndex]; // "1990s"
+                                        const clickedDecade = parseInt(clickedDecadeLabel); // 1990
+                                        const filteredBooks = year === 'All Time' ? books : books.filter(b => b.readYear === year);
+                                        const booksFromDecade = filteredBooks.filter(book => book.publicationYear && Math.floor(book.publicationYear / 10) * 10 === clickedDecade);
+                                        
+                                        setDecadeModalData({
+                                            isOpen: true,
+                                            decade: clickedDecadeLabel,
+                                            books: booksFromDecade
+                                        });
+                                    }
+                                },
+                                onHover: (event, chartElement) => {
+                                    const canvas = event.native.target;
+                                    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                                },
+                                scales: { y: { ticks: { color: 'white', stepSize: 1 }, grid: { color: '#4b5563' } }, x: { ticks: { color: 'white' } } }, 
+                                plugins: { legend: { display: false }}
+                            }
                         });
                         chartInstances.push(decadeChart);
                     }
@@ -1044,9 +1098,10 @@
                         if (chart) chart.destroy();
                     });
                 };
-            }, [stats, books]);
+            }, [stats, books, year]);
 
             const handleCloseModal = () => setModalData({ isOpen: false, country: '', books: [] });
+            const handleCloseDecadeModal = () => setDecadeModalData({ isOpen: false, decade: '', books: [] });
 
             if (loading) return <p>Loading stats...</p>;
 
@@ -1057,6 +1112,12 @@
                         country={modalData.country}
                         books={modalData.books}
                         onClose={handleCloseModal}
+                    />
+                    <DecadeBooksModal
+                        isOpen={decadeModalData.isOpen}
+                        decade={decadeModalData.decade}
+                        books={decadeModalData.books}
+                        onClose={handleCloseDecadeModal}
                     />
                     <div className="flex items-center gap-4 mb-6">
                         <h2 className="text-2xl font-bold">Statistics for</h2>
@@ -1336,8 +1397,7 @@
                 
                 setBulkEditData(updatedData);
             };
-
-            // --- CORRECTED FUNCTION ---
+            
             const handleSaveBulkEdit = async () => {
                 try {
                     const batch = writeBatch(db);
@@ -1345,10 +1405,9 @@
                         const year = Number(book.readYear);
                         const month = Number(book.readMonth);
 
-                        // Prevents crash if year or month is not a valid number
                         if (isNaN(year) || isNaN(month)) {
                             console.warn(`Skipping book "${book.title}" due to invalid date.`);
-                            return; // Skips to the next book in the loop
+                            return;
                         }
 
                         const bookRef = doc(db, "readings", book.id);
@@ -1357,7 +1416,7 @@
                         
                         const updatedData = {
                             ...dataToSave,
-                            pageCount: Number(book.pageCount) || 0, // Ensures pageCount is a number
+                            pageCount: Number(book.pageCount) || 0,
                             readDate: newReadDate,
                             readYear: year,
                         };
@@ -1390,13 +1449,13 @@
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
                          <div className="flex items-center gap-2">
-                               <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                   <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                   <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
-                               </div>
-                               {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
-                                   <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
-                               )}
+                             <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                 <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                             </div>
+                             {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
+                                 <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                             )}
                          </div>
                     </div>
                     
