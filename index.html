@@ -270,7 +270,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.57</span>
+                        <span className="font-mono text-xs text-gray-500">v0.58</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -347,23 +347,33 @@
                 if (!bookData) return;
                 
                 const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
-                const bookToAdd = {
-                    ...bookData,
+                
+                // Explicitly create the object to be saved to avoid sending UI state
+                const bookToSave = {
+                    title: bookData.title,
+                    author: bookData.author,
+                    isFiction: bookData.isFiction,
+                    genre: bookData.genre,
+                    pageCount: Number(bookData.pageCount) || 0,
+                    publicationYear: bookData.publicationYear,
+                    coverUrl: bookData.coverUrl,
+                    country: bookData.country,
                     isbn: sanitizeIsbn(isbn),
-                    readDate,
+                    readDate: readDate,
                     readYear: Number(readYear),
                     userId: auth.currentUser.uid,
                     orderIndex: Date.now(),
                 };
 
                 try {
-                    await addDoc(collection(db, "readings"), bookToAdd);
+                    await addDoc(collection(db, "readings"), bookToSave);
                     setIsbn('');
                     setBookData(null);
                     setReadMonth(new Date().getMonth());
                     setReadYear(new Date().getFullYear());
                     onBookAdded();
                 } catch (err) {
+                    console.error("Error adding single book:", err);
                     setError('Failed to save book to your library.');
                 }
             };
@@ -376,25 +386,33 @@
                 }
                 
                 const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
-                const bookToAdd = {
-                    ...manualFormData,
+                
+                // Explicitly create the object to be saved
+                const bookToSave = {
+                    title: manualFormData.title,
+                    author: manualFormData.author,
+                    isFiction: manualFormData.isFiction,
+                    genre: manualFormData.genre,
                     pageCount: Number(manualFormData.pageCount) || 0,
                     coverUrl: manualFormData.coverUrl || `https://placehold.co/128x192/1f2937/ffffff?text=${manualFormData.title.split(' ').join('+')}`,
-                    readDate,
+                    country: manualFormData.country,
+                    readDate: readDate,
                     readYear: Number(readYear),
                     userId: auth.currentUser.uid,
                     orderIndex: Date.now(),
                     isbn: '', // No ISBN for manual entries
+                    publicationYear: 'N/A', // Default for manual entries
                 };
 
                 try {
-                    await addDoc(collection(db, "readings"), bookToAdd);
+                    await addDoc(collection(db, "readings"), bookToSave);
                     setIsManualAdd(false);
                     setManualFormData({ title: '', author: '', isFiction: true, genre: '', pageCount: 0, coverUrl: '', country: '' });
                     setReadMonth(new Date().getMonth());
                     setReadYear(new Date().getFullYear());
                     onBookAdded();
                 } catch (err) {
+                    console.error("Error adding manual book:", err);
                     setError('Failed to save book to your library.');
                 }
             };
@@ -682,16 +700,24 @@
                         const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                         const newBookRef = doc(collection(db, "readings"));
                         
-                        // Destructure to remove properties that should not be saved to Firestore
-                        const { isAddingNewGenre, ...dataToSave } = book;
-
-                        batch.set(newBookRef, {
-                            ...dataToSave,
-                            readDate,
+                        // Explicitly create the object to save, ensuring no UI state properties are included.
+                        const bookToSave = {
+                            title: book.title,
+                            author: book.author,
+                            isFiction: book.isFiction,
+                            genre: book.genre,
+                            pageCount: Number(book.pageCount) || 0,
+                            publicationYear: book.publicationYear,
+                            coverUrl: book.coverUrl,
+                            country: book.country,
+                            isbn: book.isbn,
+                            readDate: readDate,
                             readYear: Number(book.readYear),
                             userId: auth.currentUser.uid,
                             orderIndex: baseOrderIndex + index,
-                        });
+                        };
+
+                        batch.set(newBookRef, bookToSave);
                     });
                     await batch.commit();
                     onBooksAdded();
