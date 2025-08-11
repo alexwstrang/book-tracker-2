@@ -284,7 +284,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.62</span>
+                        <span className="font-mono text-xs text-gray-500">v0.63</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -850,7 +850,7 @@
             );
         }
 
-        // --- Decade Books Modal Component (NEW) ---
+        // --- Decade Books Modal Component ---
         function DecadeBooksModal({ isOpen, decade, books, onClose }) {
             if (!isOpen) return null;
 
@@ -888,11 +888,9 @@
             const [decadeModalData, setDecadeModalData] = useState({ isOpen: false, decade: '', books: [] });
             
             const availableYears = useMemo(() => {
-                const years = new Set(books.map(b => b.readYear));
+                const years = new Set(books.map(b => b.readYear).filter(y => y)); // Filter out any null/undefined years
                 const currentYear = new Date().getFullYear();
-                for (let y = currentYear; y >= 2014; y--) {
-                    years.add(y);
-                }
+                years.add(currentYear); // Ensure the current year is always available as an option
                 return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
             }, [books]);
 
@@ -1182,7 +1180,7 @@
             );
         }
 
-        // --- Books Display (Gallery + List) Component ---
+        // --- Books Display (Gallery + List) Component (UPDATED)---
         function BooksDisplay({ books, loading, onBookUpdated }) {
             const [viewMode, setViewMode] = useState('list');
             const [displayedBooks, setDisplayedBooks] = useState([]);
@@ -1198,8 +1196,9 @@
             const draggedItem = useRef(null);
             
             const availablePeriods = useMemo(() => {
-                const years = new Set(books.map(b => b.readYear));
-                for (let y = new Date().getFullYear(); y >= 2014; y--) years.add(y);
+                const years = new Set(books.map(b => b.readYear).filter(y => y)); // Filter out any null/undefined years
+                const currentYear = new Date().getFullYear();
+                years.add(currentYear); // Ensure the current year is always available as an option
                 return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
             }, [books]);
             
