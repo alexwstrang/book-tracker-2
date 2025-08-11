@@ -233,8 +233,21 @@
                     const q = query(collection(db, "readings"), where("userId", "==", user.uid));
                     const querySnapshot = await getDocs(q);
                     const userBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Sort by custom order first, then by date for books without an order
-                    userBooks.sort((a, b) => (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity) || new Date(a.readDate) - new Date(b.readDate));
+                    
+                    // --- THIS IS THE CORRECTED CODE BLOCK ---
+                    userBooks.sort((a, b) => {
+                        const orderDiff = (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity);
+                        // If orderIndex is different and valid, sort by it.
+                        if (orderDiff !== 0 && !isNaN(orderDiff)) {
+                            return orderDiff;
+                        }
+                        // Otherwise, fall back to sorting by readDate, safely handling invalid dates.
+                        const dateA = new Date(a.readDate).getTime() || 0;
+                        const dateB = new Date(b.readDate).getTime() || 0;
+                        return dateA - dateB;
+                    });
+                    // --- END OF CORRECTION ---
+
                     setBooks(userBooks);
                 } catch (error) {
                     console.error("Error fetching books:", error);
@@ -276,7 +289,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.59</span>
+                        <span className="font-mono text-xs text-gray-500">v0.60</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -552,7 +565,7 @@
                                  <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                              </div>
                              <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add to Library</button>
-                         </form>
+                          </form>
                     )}
 
                     {bookData && !isManualAdd && (
@@ -780,11 +793,11 @@
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2">
                                                      <div>
-                                                         <label className="block text-xs font-medium text-gray-400">Type</label>
-                                                         <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                             <option value="true">Fiction</option>
-                                                             <option value="false">Non-Fiction</option>
-                                                         </select>
+                                                        <label className="block text-xs font-medium text-gray-400">Type</label>
+                                                        <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
+                                                            <option value="true">Fiction</option>
+                                                            <option value="false">Non-Fiction</option>
+                                                        </select>
                                                      </div>
                                                     <div>
                                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
@@ -1369,13 +1382,13 @@
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
                          <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
                          <div className="flex items-center gap-2">
-                              <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                  <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                  <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
-                              </div>
-                              {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
-                                  <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
-                              )}
+                               <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                   <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                   <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                               </div>
+                               {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
+                                   <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                               )}
                          </div>
                     </div>
                     
