@@ -234,24 +234,19 @@
                     const querySnapshot = await getDocs(q);
                     const userBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // --- THIS IS THE CORRECTED CODE BLOCK ---
                     userBooks.sort((a, b) => {
                         const orderDiff = (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity);
-                        // If orderIndex is different and valid, sort by it.
                         if (orderDiff !== 0 && !isNaN(orderDiff)) {
                             return orderDiff;
                         }
-                        // Otherwise, fall back to sorting by readDate, safely handling invalid dates.
                         const dateA = new Date(a.readDate).getTime() || 0;
                         const dateB = new Date(b.readDate).getTime() || 0;
                         return dateA - dateB;
                     });
-                    // --- END OF CORRECTION ---
 
                     setBooks(userBooks);
                 } catch (error) {
                     console.error("Error fetching books:", error);
-                    // Optionally set an error state to show a message to the user
                 } finally {
                     setLoadingBooks(false);
                 }
@@ -367,7 +362,6 @@
                 
                 const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
                 
-                // Explicitly create the object to be saved to avoid sending UI state
                 const bookToSave = {
                     title: bookData.title,
                     author: bookData.author,
@@ -406,7 +400,6 @@
                 
                 const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
                 
-                // Explicitly create the object to be saved
                 const bookToSave = {
                     title: manualFormData.title,
                     author: manualFormData.author,
@@ -419,8 +412,8 @@
                     readYear: Number(readYear),
                     userId: auth.currentUser.uid,
                     orderIndex: Date.now(),
-                    isbn: '', // No ISBN for manual entries
-                    publicationYear: 'N/A', // Default for manual entries
+                    isbn: '', 
+                    publicationYear: 'N/A',
                 };
 
                 try {
@@ -476,7 +469,7 @@
 
             const handleToggleManualAdd = () => {
                 setIsManualAdd(true);
-                setError(''); // Clear the "not found" error
+                setError('');
             };
 
             return (
@@ -719,7 +712,6 @@
                         const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
                         const newBookRef = doc(collection(db, "readings"));
                         
-                        // Explicitly create the object to save, ensuring no UI state properties are included.
                         const bookToSave = {
                             title: book.title,
                             author: book.author,
@@ -1129,7 +1121,7 @@
             );
         }
 
-// --- Books Display (Gallery + List) Component ---
+        // --- Books Display (Gallery + List) Component ---
         function BooksDisplay({ books, loading, onBookUpdated }) {
             const [viewMode, setViewMode] = useState('list');
             const [displayedBooks, setDisplayedBooks] = useState([]);
@@ -1139,7 +1131,7 @@
             const [isEditingNewGenre, setIsEditingNewGenre] = useState(false);
             const [isBulkEditing, setIsBulkEditing] = useState(false);
             const [bulkEditData, setBulkEditData] = useState([]);
-            const [selectedPeriod, setSelectedPeriod] = useState(new Date().getFullYear()); // Can be a year (number) or 'All Time' (string)
+            const [selectedPeriod, setSelectedPeriod] = useState(new Date().getFullYear());
             const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, bookId: null });
             
             const draggedItem = useRef(null);
@@ -1345,23 +1337,39 @@
                 setBulkEditData(updatedData);
             };
 
+            // --- CORRECTED FUNCTION ---
             const handleSaveBulkEdit = async () => {
-                const batch = writeBatch(db);
-                bulkEditData.forEach(book => {
-                    const bookRef = doc(db, "readings", book.id);
-                    const newReadDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
-                    const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
-                    const updatedData = {
-                        ...dataToSave,
-                        pageCount: Number(book.pageCount),
-                        readDate: newReadDate,
-                        readYear: Number(book.readYear),
-                    };
-                    batch.update(bookRef, updatedData);
-                });
-                await batch.commit();
-                setIsBulkEditing(false);
-                onBookUpdated();
+                try {
+                    const batch = writeBatch(db);
+                    bulkEditData.forEach(book => {
+                        const year = Number(book.readYear);
+                        const month = Number(book.readMonth);
+
+                        // Prevents crash if year or month is not a valid number
+                        if (isNaN(year) || isNaN(month)) {
+                            console.warn(`Skipping book "${book.title}" due to invalid date.`);
+                            return; // Skips to the next book in the loop
+                        }
+
+                        const bookRef = doc(db, "readings", book.id);
+                        const newReadDate = new Date(year, month, 15).toISOString().split('T')[0];
+                        const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
+                        
+                        const updatedData = {
+                            ...dataToSave,
+                            pageCount: Number(book.pageCount) || 0, // Ensures pageCount is a number
+                            readDate: newReadDate,
+                            readYear: year,
+                        };
+                        batch.update(bookRef, updatedData);
+                    });
+                    await batch.commit();
+                    setIsBulkEditing(false);
+                    onBookUpdated();
+                } catch (error) {
+                    console.error("Failed to save bulk changes:", error);
+                    alert("Error: Could not save changes. Please ensure all fields like Year have valid numbers.");
+                }
             };
 
 
@@ -1534,7 +1542,7 @@
                                                     <input
                                                         type="number"
                                                         value={bulkEditData[index]?.pageCount || 0}
-                                                        onChange={(e) => handleBulkEditChange(index, 'pageCount', e.target.value)}
+                                                        onChange={(e) => handleBulkEditChange(index, 'pageCount', parseInt(e.target.value) || 0)}
                                                         className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
                                                     />
                                                 </div>
