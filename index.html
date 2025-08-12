@@ -809,36 +809,41 @@
             );
         }
         
-        // --- Country Books Modal Component ---
-        function CountryBooksModal({ isOpen, country, books, onClose }) {
-            if (!isOpen) return null;
+       // --- Country Books Modal Component ---
+        function CountryBooksModal({ isOpen, country, books, onClose }) {
+            if (!isOpen) return null;
 
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-white">Books from {country}</h2>
-                            <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
-                        </div>
-                        <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
-                            {books.length > 0 ? books.map(book => (
-                                <div key={book.id} className="flex items-center gap-4 p-3 bg-gray-700 rounded-lg">
-                                    <img src={book.coverUrl} alt={book.title} className="w-12 h-20 object-cover rounded-md flex-shrink-0"/>
-                                    <div>
-                                        <p className="font-bold text-white">{book.title}</p>
-                                        <p className="text-sm text-gray-300">{book.author}</p>
-                                        <p className="text-xs text-gray-500">Read in {new Date(book.readDate).getFullYear()}</p>
-                                    </div>
-                                </div>
-                            )) : (
-                                <p className="text-gray-400">No books found for this country.</p>
-                            )}
-                        </div>
-                        <button onClick={onClose} className="mt-2 ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
-                    </div>
-                </div>
-            );
-        }
+        const sortedBooks = useMemo(() => {
+            // Sort books by readDate in descending order (most recent first)
+            return [...books].sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
+        }, [books]);
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-gray-800 p-6 rounded-lg max-w-2xl w-full flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-white">Books from {country}</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
+                            {sortedBooks.length > 0 ? sortedBooks.map(book => (
+                                <div key={book.id} className="flex items-center gap-4 p-3 bg-gray-700 rounded-lg">
+                                    <img src={book.coverUrl} alt={book.title} className="w-12 h-20 object-cover rounded-md flex-shrink-0"/>
+                                    <div>
+                                        <p className="font-bold text-white">{book.title}</p>
+                          _              <p className="text-sm text-gray-300">{book.author}</p>
+                                        <p className="text-xs text-gray-500">Read in {new Date(book.readDate).getFullYear()}</p>
+                                    </div>
+                                </div>
+                            )) : (
+                                <p className="text-gray-400">No books found for this country.</p>
+                            )}
+                        </div>
+                        <button onClick={onClose} className="mt-2 ml-auto px-4 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+                    </div>
+                </div>
+            );
+        }
 
         // --- Decade Books Modal Component ---
         function DecadeBooksModal({ isOpen, decade, books, onClose }) {
