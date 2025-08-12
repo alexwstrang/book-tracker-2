@@ -348,7 +348,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.71</span>
+                        <span className="font-mono text-xs text-gray-500">v0.72</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -2016,6 +2016,7 @@
 
         // --- Achievements Component ---
         const achievementsList = [
+            // Yearly
             {
                 id: 'bookworm-yearly',
                 name: 'Bookworm',
@@ -2071,6 +2072,39 @@
                 }
             },
             {
+                id: 'consistent-reader-yearly',
+                name: 'Consistent Reader',
+                description: 'Read at least one book every month of the year.',
+                type: 'yearly',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M2 2H14V14H2V2Z" fill="#4B5563"/>
+                        <path d="M3 3H13V13H3V3Z" fill="#6B7280"/>
+                        <path d="M4 1H5V3H4V1Z" fill="#4B5563"/><path d="M11 1H12V3H11V1Z" fill="#4B5563"/>
+                        <path d="M4 4H12V12H4V4Z" fill="#F9FAFB"/>
+                        <path d="M4 4H12V5H4V4Z" fill="#EF4444"/>
+                    </svg>
+                ),
+                condition: (books) => {
+                    const months = new Set(books.map(b => new Date(b.readDate).getMonth()));
+                    return months.size === 12;
+                }
+            },
+            {
+                id: 'goal-smasher-yearly',
+                name: 'Goal-Smasher',
+                description: 'Exceed your yearly reading goal by 10 books.',
+                type: 'yearly',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M8 1L10 5L14 6L11 9L12 13L8 11L4 13L5 9L2 6L6 5L8 1Z" fill="#F59E0B"/>
+                        <path d="M8 2L9.5 5.5L13 6.5L10.5 9L11 12.5L8 11L5 12.5L5.5 9L3 6.5L6.5 5.5L8 2Z" fill="#FBBF24"/>
+                    </svg>
+                ),
+                condition: (books) => books.length >= YEARLY_GOAL + 10,
+            },
+            // Lifetime
+            {
                 id: 'the-epic-lifetime',
                 name: 'The Epic',
                 description: 'Finish a book over 750 pages long.',
@@ -2105,6 +2139,24 @@
                 ),
                 condition: (books) => books.length >= 250,
             },
+            {
+                id: 'archivist-lifetime',
+                name: 'Archivist',
+                description: 'Log 500 books in total.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M2 2H14V14H2V2Z" fill="#FCD34D"/>
+                        <path d="M3 3H13V13H3V3Z" fill="#FBBF24"/>
+                        <path d="M4 4H12V12H4V4Z" fill="#F59E0B"/>
+                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/>
+                        <path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
+                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/>
+                        <path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
+                    </svg>
+                ),
+                condition: (books) => books.length >= 500,
+            },
              {
                 id: 'loyallist-lifetime',
                 name: 'Loyalist',
@@ -2125,6 +2177,22 @@
                     }, {});
                     return Object.values(authorCounts).some(count => count >= 10);
                 }
+            },
+            {
+                id: 'page-millionaire-lifetime',
+                name: 'Page Millionaire',
+                description: 'Read over 1,000,000 pages.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 3H13V13H3V3Z" fill="#10B981"/>
+                        <path d="M4 4H12V12H4V4Z" fill="#34D399"/>
+                        <path d="M6 6H7V10H6V6Z" fill="white"/>
+                        <path d="M8 6H9V7H8V6Z" fill="white"/>
+                        <path d="M8 8H9V10H8V8Z" fill="white"/>
+                    </svg>
+                ),
+                condition: (books) => books.reduce((acc, book) => acc + (book.pageCount || 0), 0) >= 1000000,
             },
         ];
 
