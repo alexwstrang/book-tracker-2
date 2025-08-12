@@ -237,6 +237,7 @@
         function Dashboard({ user }) {
             const [view, setView] = useState('gallery');
             const [books, setBooks] = useState([]);
+            const [tbrBooks, setTbrBooks] = useState([]);
             const [loadingBooks, setLoadingBooks] = useState(true);
 
             const fetchBooks = useCallback(async () => {
@@ -265,13 +266,50 @@
                 }
             }, [user]);
 
+            const fetchTbrBooks = useCallback(async () => {
+                if (!user) return;
+                try {
+                    const q = query(collection(db, "tbr_books"), where("userId", "==", user.uid));
+                    const querySnapshot = await getDocs(q);
+                    const userTbrBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setTbrBooks(userTbrBooks);
+                } catch (error) {
+                    console.error("Error fetching TBR books:", error);
+                }
+            }, [user]);
+
             useEffect(() => {
                 fetchBooks();
-            }, [fetchBooks]);
+                fetchTbrBooks();
+            }, [fetchBooks, fetchTbrBooks]);
 
             const handleBooksChanged = () => {
                 fetchBooks();
+                fetchTbrBooks();
                 setView('gallery');
+            };
+
+            const handleTbrChanged = () => {
+                fetchTbrBooks();
+                setView('tbr');
+            };
+
+            const handleMarkAsRead = async (book, readDate) => {
+                try {
+                    const { id, ...bookData } = book;
+                    const bookToSave = {
+                        ...bookData,
+                        readDate: readDate.toISOString().split('T')[0],
+                        readYear: readDate.getFullYear(),
+                        orderIndex: Date.now(),
+                    };
+                    await addDoc(collection(db, "readings"), bookToSave);
+                    await deleteDoc(doc(db, "tbr_books", id));
+                    fetchBooks();
+                    fetchTbrBooks();
+                } catch (error) {
+                    console.error("Error marking book as read:", error);
+                }
             };
 
             const currentYear = new Date().getFullYear();
@@ -282,10 +320,11 @@
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
                         {view === 'gallery' && <GoalProgress count={booksThisYear.length} goal={YEARLY_GOAL} />}
-                        {view === 'add-single' && <AddBook books={books} onBookAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
-                        {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add-single' && <AddBook books={books} onBookAdded={handleBooksChanged} onTbrAdded={handleTbrChanged} onCancel={() => setView('gallery')} />}
+                        {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onTbrAdded={handleTbrChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
                         {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} />}
+                        {view === 'tbr' && <TbrDisplay tbrBooks={tbrBooks} loading={loadingBooks} onBookUpdated={fetchTbrBooks} onMarkAsRead={handleMarkAsRead} />}
                         {view === 'search' && <Search books={books} onCancel={() => setView('gallery')} />}
                     </main>
                 </div>
@@ -301,10 +340,11 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.66</span>
+                        <span className="font-mono text-xs text-gray-500">v0.67</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
+                        <button onClick={() => setView('tbr')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'tbr' ? activeClass : inactiveClass}`}>TBR</button>
                         <button onClick={() => setView('stats')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'stats' ? activeClass : inactiveClass}`}>Stats</button>
                         <button onClick={() => setView('search')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'search' ? activeClass : inactiveClass}`}>Search</button>
                         <button onClick={() => setView('add-single')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'add-single' ? activeClass : inactiveClass}`}>+ Add Book</button>
@@ -319,7 +359,7 @@
         }
 
         // --- Add Single Book Component ---
-        function AddBook({ books, onBookAdded, onCancel }) {
+        function AddBook({ books, onBookAdded, onTbrAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
             const [loading, setLoading] = useState(false);
@@ -328,6 +368,7 @@
             const [readYear, setReadYear] = useState(new Date().getFullYear());
             const [isAddingNewGenre, setIsAddingNewGenre] = useState(false);
             const [isManualAdd, setIsManualAdd] = useState(false);
+            const [listType, setListType] = useState('read'); // 'read' or 'tbr'
             const [manualFormData, setManualFormData] = useState({
                 title: '',
                 author: '',
@@ -377,9 +418,9 @@
                 e.preventDefault();
                 if (!bookData) return;
                 
-                const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
-                
-                const bookToSave = {
+                const collectionName = listType === 'read' ? 'readings' : 'tbr_books';
+
+                let bookToSave = {
                     title: bookData.title,
                     author: bookData.author,
                     isFiction: bookData.isFiction,
@@ -389,22 +430,31 @@
                     coverUrl: bookData.coverUrl,
                     country: bookData.country,
                     isbn: sanitizeIsbn(isbn),
-                    readDate: readDate,
-                    readYear: Number(readYear),
                     userId: auth.currentUser.uid,
-                    orderIndex: Date.now(),
                 };
 
+                if (listType === 'read') {
+                    const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
+                    bookToSave = {
+                        ...bookToSave,
+                        readDate: readDate,
+                        readYear: Number(readYear),
+                        orderIndex: Date.now(),
+                    };
+                }
+
                 try {
-                    await addDoc(collection(db, "readings"), bookToSave);
+                    await addDoc(collection(db, collectionName), bookToSave);
                     setIsbn('');
                     setBookData(null);
-                    setReadMonth(new Date().getMonth());
-                    setReadYear(new Date().getFullYear());
-                    onBookAdded();
+                    if (listType === 'read') {
+                        onBookAdded();
+                    } else {
+                        onTbrAdded();
+                    }
                 } catch (err) {
-                    console.error("Error adding single book:", err);
-                    setError('Failed to save book to your library.');
+                    console.error("Error adding book:", err);
+                    setError('Failed to save book.');
                 }
             };
 
@@ -415,9 +465,9 @@
                     return;
                 }
                 
-                const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
-                
-                const bookToSave = {
+                const collectionName = listType === 'read' ? 'readings' : 'tbr_books';
+
+                let bookToSave = {
                     title: manualFormData.title,
                     author: manualFormData.author,
                     isFiction: manualFormData.isFiction,
@@ -425,24 +475,33 @@
                     pageCount: Number(manualFormData.pageCount) || 0,
                     coverUrl: manualFormData.coverUrl || `https://placehold.co/128x192/1f2937/ffffff?text=${manualFormData.title.split(' ').join('+')}`,
                     country: manualFormData.country,
-                    readDate: readDate,
-                    readYear: Number(readYear),
                     userId: auth.currentUser.uid,
-                    orderIndex: Date.now(),
                     isbn: '', 
                     publicationYear: 'N/A',
                 };
 
+                if (listType === 'read') {
+                    const readDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
+                    bookToSave = {
+                        ...bookToSave,
+                        readDate: readDate,
+                        readYear: Number(readYear),
+                        orderIndex: Date.now(),
+                    };
+                }
+
                 try {
-                    await addDoc(collection(db, "readings"), bookToSave);
+                    await addDoc(collection(db, collectionName), bookToSave);
                     setIsManualAdd(false);
                     setManualFormData({ title: '', author: '', isFiction: true, genre: '', pageCount: 0, coverUrl: '', country: '' });
-                    setReadMonth(new Date().getMonth());
-                    setReadYear(new Date().getFullYear());
-                    onBookAdded();
+                    if (listType === 'read') {
+                        onBookAdded();
+                    } else {
+                        onTbrAdded();
+                    }
                 } catch (err) {
                     console.error("Error adding manual book:", err);
-                    setError('Failed to save book to your library.');
+                    setError('Failed to save book.');
                 }
             };
             
@@ -496,6 +555,17 @@
                         <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
                     </div>
 
+                    <div className="flex justify-center gap-4 mb-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="listType" value="read" checked={listType === 'read'} onChange={() => setListType('read')} className="form-radio text-indigo-500" />
+                            <span>Add to Library</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="listType" value="tbr" checked={listType === 'tbr'} onChange={() => setListType('tbr')} className="form-radio text-indigo-500" />
+                            <span>Add to TBR</span>
+                        </label>
+                    </div>
+
                     {!isManualAdd && (
                         <form onSubmit={handleIsbnSearch} className="flex gap-2 mb-4">
                             <input
@@ -537,15 +607,17 @@
                                  <label className="block text-sm font-medium text-gray-400">Cover Image URL</label>
                                  <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                              </div>
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                 <div className="flex gap-2 mt-1">
-                                     <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
-                                         {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                     </select>
-                                     <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
-                                 </div>
-                             </div>
+                             {listType === 'read' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400">Date Read</label>
+                                    <div className="flex gap-2 mt-1">
+                                        <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                        </select>
+                                        <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                    </div>
+                                </div>
+                             )}
                              <div className="grid grid-cols-2 gap-4">
                                  <div>
                                      <label className="block text-sm font-medium text-gray-400">Type</label>
@@ -574,7 +646,7 @@
                                  <label className="block text-sm font-medium text-gray-400">Author's Country</label>
                                  <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                              </div>
-                             <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add to Library</button>
+                             <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
                          </form>
                     )}
 
@@ -587,15 +659,17 @@
                                 <div className="md:col-span-2 space-y-4">
                                     <h3 className="text-2xl font-bold">{bookData.title}</h3>
                                     <p className="text-gray-400">by {bookData.author}</p>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                        <div className="flex gap-2 mt-1">
-                                            <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
-                                                {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                            </select>
-                                            <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                    {listType === 'read' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-400">Date Read</label>
+                                            <div className="flex gap-2 mt-1">
+                                                <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                </select>
+                                                <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-400">Type</label>
@@ -624,7 +698,7 @@
                                         <label className="block text-sm font-medium text-gray-400">Author's Country</label>
                                         <input type="text" name="country" value={bookData.country} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                     </div>
-                                    <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add to Library</button>
+                                    <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
                                 </div>
                             </div>
                         </form>
@@ -634,11 +708,12 @@
         }
 
         // --- Add Multiple Books Component ---
-        function AddMultipleBooks({ books, onBooksAdded, onCancel }) {
+        function AddMultipleBooks({ books, onBooksAdded, onTbrAdded, onCancel }) {
             const [isbnList, setIsbnList] = useState('');
             const [foundBooks, setFoundBooks] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState('');
+            const [listType, setListType] = useState('read'); // 'read' or 'tbr'
 
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
@@ -722,14 +797,15 @@
                     return;
                 }
 
+                const collectionName = listType === 'read' ? 'readings' : 'tbr_books';
+
                 try {
                     const batch = writeBatch(db);
                     let baseOrderIndex = Date.now();
                     booksToAdd.forEach((book, index) => {
-                        const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
-                        const newBookRef = doc(collection(db, "readings"));
+                        const newBookRef = doc(collection(db, collectionName));
                         
-                        const bookToSave = {
+                        let bookToSave = {
                             title: book.title,
                             author: book.author,
                             isFiction: book.isFiction,
@@ -739,19 +815,30 @@
                             coverUrl: book.coverUrl,
                             country: book.country,
                             isbn: book.isbn,
-                            readDate: readDate,
-                            readYear: Number(book.readYear),
                             userId: auth.currentUser.uid,
-                            orderIndex: baseOrderIndex + index,
                         };
+
+                        if (listType === 'read') {
+                            const readDate = new Date(book.readYear, book.readMonth, 15).toISOString().split('T')[0];
+                            bookToSave = {
+                                ...bookToSave,
+                                readDate: readDate,
+                                readYear: Number(book.readYear),
+                                orderIndex: baseOrderIndex + index,
+                            };
+                        }
 
                         batch.set(newBookRef, bookToSave);
                     });
                     await batch.commit();
-                    onBooksAdded();
+                    if (listType === 'read') {
+                        onBooksAdded();
+                    } else {
+                        onTbrAdded();
+                    }
                 } catch (err) {
                     console.error("Error saving books:", err);
-                    setError('Failed to save books to your library.');
+                    setError('Failed to save books.');
                 }
             };
 
@@ -761,6 +848,18 @@
                         <h2 className="text-xl font-bold">Add Multiple Books</h2>
                         <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
                     </div>
+
+                    <div className="flex justify-center gap-4 mb-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="listType" value="read" checked={listType === 'read'} onChange={() => setListType('read')} className="form-radio text-indigo-500" />
+                            <span>Add to Library</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="listType" value="tbr" checked={listType === 'tbr'} onChange={() => setListType('tbr')} className="form-radio text-indigo-500" />
+                            <span>Add to TBR</span>
+                        </label>
+                    </div>
+
                     <form onSubmit={handleFindBooks} className="mb-4">
                         <textarea
                             value={isbnList}
@@ -791,15 +890,17 @@
                                                     <p className="font-bold">{book.title}</p>
                                                     <p className="text-sm text-gray-400">{book.author}</p>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-gray-400">Date Read</label>
-                                                    <div className="flex gap-2 mt-1">
-                                                        <select value={book.readMonth} onChange={e => handleBookDataChange(index, 'readMonth', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white">
-                                                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                                        </select>
-                                                        <input type="number" value={book.readYear} onChange={e => handleBookDataChange(index, 'readYear', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white" />
+                                                {listType === 'read' && (
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-400">Date Read</label>
+                                                        <div className="flex gap-2 mt-1">
+                                                            <select value={book.readMonth} onChange={e => handleBookDataChange(index, 'readMonth', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white">
+                                                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                            </select>
+                                                            <input type="number" value={book.readYear} onChange={e => handleBookDataChange(index, 'readYear', parseInt(e.target.value))} className="w-full p-2 bg-gray-600 rounded-md text-sm text-white" />
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                                 <div className="grid grid-cols-2 gap-2">
                                                      <div>
                                                         <label className="block text-xs font-medium text-gray-400">Type</label>
@@ -829,7 +930,7 @@
                                     )}
                                 </div>
                             ))}
-                                 <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All to Library</button>
+                                 <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All Books</button>
                         </div>
                     )}
                 </div>
@@ -1795,6 +1896,108 @@
                 </div>
             );
         }
+
+        // --- TBR Display Component ---
+        function TbrDisplay({ tbrBooks, loading, onBookUpdated, onMarkAsRead }) {
+            const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, bookId: null });
+            const [markReadModal, setMarkReadModal] = useState({ isOpen: false, book: null });
+
+            const handleDeleteRequest = (bookId) => {
+                setConfirmDelete({ isOpen: true, bookId });
+            };
+
+            const confirmDeletion = async () => {
+                if (confirmDelete.bookId) {
+                    await deleteDoc(doc(db, "tbr_books", confirmDelete.bookId));
+                    onBookUpdated();
+                }
+                setConfirmDelete({ isOpen: false, bookId: null });
+            };
+
+            const handleMarkAsReadRequest = (book) => {
+                setMarkReadModal({ isOpen: true, book });
+            };
+
+            const handleConfirmMarkAsRead = (readDate) => {
+                onMarkAsRead(markReadModal.book, readDate);
+                setMarkReadModal({ isOpen: false, book: null });
+            };
+
+            if (loading) return <p>Loading TBR list...</p>;
+
+            return (
+                <div>
+                    <ConfirmationModal 
+                        isOpen={confirmDelete.isOpen}
+                        message="Are you sure you want to remove this book from your TBR list?"
+                        onConfirm={confirmDeletion}
+                        onCancel={() => setConfirmDelete({ isOpen: false, bookId: null })}
+                    />
+                    <MarkAsReadModal
+                        isOpen={markReadModal.isOpen}
+                        book={markReadModal.book}
+                        onConfirm={handleConfirmMarkAsRead}
+                        onCancel={() => setMarkReadModal({ isOpen: false, book: null })}
+                    />
+                    <h2 className="text-2xl font-bold mb-6">To Be Read List</h2>
+                    {tbrBooks.length === 0 ? (
+                        <p className="text-gray-400">Your TBR list is empty. Add a book to get started!</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {tbrBooks.map(book => (
+                                <div key={book.id} className="bg-gray-800 p-4 rounded-lg flex gap-4">
+                                    <img src={book.coverUrl} alt={book.title} className="w-20 h-32 object-cover rounded-md flex-shrink-0"/>
+                                    <div className="flex flex-col justify-between w-full">
+                                        <div>
+                                            <h3 className="font-bold text-white">{book.title}</h3>
+                                            <p className="text-sm text-gray-400">{book.author}</p>
+                                        </div>
+                                        <div className="flex gap-2 mt-2 self-end">
+                                            <button onClick={() => handleMarkAsReadRequest(book)} className="px-3 py-1 text-xs font-bold bg-green-600 text-white rounded-md hover:bg-green-700">Mark as Read</button>
+                                            <button onClick={() => handleDeleteRequest(book.id)} className="p-2 rounded-md hover:bg-gray-700" title="Delete">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function MarkAsReadModal({ isOpen, book, onConfirm, onCancel }) {
+            const [readMonth, setReadMonth] = useState(new Date().getMonth());
+            const [readYear, setReadYear] = useState(new Date().getFullYear());
+
+            if (!isOpen) return null;
+
+            const handleConfirm = () => {
+                const readDate = new Date(readYear, readMonth, 15);
+                onConfirm(readDate);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full">
+                        <h3 className="text-lg font-bold text-white mb-2">Mark as Read</h3>
+                        <p className="text-white mb-4">When did you finish reading "{book.title}"?</p>
+                        <div className="flex gap-2 mb-4">
+                            <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                            </select>
+                            <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                        </div>
+                        <div className="flex justify-end gap-4">
+                            <button onClick={onCancel} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancel</button>
+                            <button onClick={handleConfirm} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
 
         // Render the app
         const container = document.getElementById('root');
