@@ -348,7 +348,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.72</span>
+                        <span className="font-mono text-xs text-gray-500">v0.73</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -2056,10 +2056,8 @@
                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
                         <path d="M3 5H4V4H5V3H11V4H12V5H13V11H12V12H11V13H5V12H4V11H3V5Z" fill="#FBBF24"/>
                         <path d="M8 6V7H9V8H8V9H7V8H6V7H7V6H8Z" fill="white"/>
-                        <path d="M5 5H4V6H5V5Z" fill="#F59E0B"/>
-                        <path d="M11 5H12V6H11V5Z" fill="#F59E0B"/>
-                        <path d="M5 11H4V10H5V11Z" fill="#F59E0B"/>
-                        <path d="M11 11H12V10H11V11Z" fill="#F59E0B"/>
+                        <path d="M5 5H4V6H5V5Z" fill="#F59E0B"/><path d="M11 5H12V6H11V5Z" fill="#F59E0B"/>
+                        <path d="M5 11H4V10H5V11Z" fill="#F59E0B"/><path d="M11 11H12V10H11V11Z" fill="#F59E0B"/>
                     </svg>
                 ),
                 condition: (books) => {
@@ -2078,17 +2076,12 @@
                 type: 'yearly',
                 badge: (
                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 2H14V14H2V2Z" fill="#4B5563"/>
-                        <path d="M3 3H13V13H3V3Z" fill="#6B7280"/>
+                        <path d="M2 2H14V14H2V2Z" fill="#4B5563"/><path d="M3 3H13V13H3V3Z" fill="#6B7280"/>
                         <path d="M4 1H5V3H4V1Z" fill="#4B5563"/><path d="M11 1H12V3H11V1Z" fill="#4B5563"/>
-                        <path d="M4 4H12V12H4V4Z" fill="#F9FAFB"/>
-                        <path d="M4 4H12V5H4V4Z" fill="#EF4444"/>
+                        <path d="M4 4H12V12H4V4Z" fill="#F9FAFB"/><path d="M4 4H12V5H4V4Z" fill="#EF4444"/>
                     </svg>
                 ),
-                condition: (books) => {
-                    const months = new Set(books.map(b => new Date(b.readDate).getMonth()));
-                    return months.size === 12;
-                }
+                condition: (books) => new Set(books.map(b => new Date(b.readDate).getMonth())).size === 12,
             },
             {
                 id: 'goal-smasher-yearly',
@@ -2102,6 +2095,19 @@
                     </svg>
                 ),
                 condition: (books) => books.length >= YEARLY_GOAL + 10,
+            },
+            {
+                id: 'summer-reading-yearly',
+                name: 'Summer Reading',
+                description: 'Read 10 books during June, July, and August.',
+                type: 'yearly',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M8 4C9.1 4 10 4.9 10 6C10 7.1 9.1 8 8 8C6.9 8 6 7.1 6 6C6 4.9 6.9 4 8 4Z" fill="#FBBF24"/>
+                        <path d="M8 2V3H9V4H10V5H11V6H12V8H11V9H10V10H9V11H8V12H7V11H6V10H5V9H4V8H5V6H6V5H7V4H8V2Z" fill="#FDE047"/>
+                    </svg>
+                ),
+                condition: (books) => books.filter(b => [5, 6, 7].includes(new Date(b.readDate).getMonth())).length >= 10,
             },
             // Lifetime
             {
@@ -2131,10 +2137,8 @@
                         <path d="M2 2H14V14H2V2Z" fill="#A3A3A3"/>
                         <path d="M3 3H13V13H3V3Z" fill="#D4D4D4"/>
                         <path d="M4 4H12V12H4V4Z" fill="#F5F5F5"/>
-                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/>
-                        <path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
-                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/>
-                        <path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
+                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
+                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
                     </svg>
                 ),
                 condition: (books) => books.length >= 250,
@@ -2146,13 +2150,10 @@
                 type: 'lifetime',
                 badge: (
                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 2H14V14H2V2Z" fill="#FCD34D"/>
-                        <path d="M3 3H13V13H3V3Z" fill="#FBBF24"/>
+                        <path d="M2 2H14V14H2V2Z" fill="#FCD34D"/><path d="M3 3H13V13H3V3Z" fill="#FBBF24"/>
                         <path d="M4 4H12V12H4V4Z" fill="#F59E0B"/>
-                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/>
-                        <path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
-                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/>
-                        <path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
+                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
+                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
                     </svg>
                 ),
                 condition: (books) => books.length >= 500,
@@ -2185,14 +2186,54 @@
                 type: 'lifetime',
                 badge: (
                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 3H13V13H3V3Z" fill="#10B981"/>
-                        <path d="M4 4H12V12H4V4Z" fill="#34D399"/>
-                        <path d="M6 6H7V10H6V6Z" fill="white"/>
-                        <path d="M8 6H9V7H8V6Z" fill="white"/>
+                        <path d="M3 3H13V13H3V3Z" fill="#10B981"/><path d="M4 4H12V12H4V4Z" fill="#34D399"/>
+                        <path d="M6 6H7V10H6V6Z" fill="white"/><path d="M8 6H9V7H8V6Z" fill="white"/>
                         <path d="M8 8H9V10H8V8Z" fill="white"/>
                     </svg>
                 ),
                 condition: (books) => books.reduce((acc, book) => acc + (book.pageCount || 0), 0) >= 1000000,
+            },
+            {
+                id: 'decade-dabbler-lifetime',
+                name: 'Decade Dabbler',
+                description: 'Read books published in 5 different decades.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M2 4H14V6H2V4Z" fill="#9CA3AF"/><path d="M2 7H14V9H2V7Z" fill="#6B7280"/>
+                        <path d="M2 10H14V12H2V10Z" fill="#4B5563"/>
+                    </svg>
+                ),
+                condition: (books) => {
+                    const decades = new Set(books.map(b => Math.floor(b.publicationYear / 10) * 10));
+                    return decades.size >= 5;
+                }
+            },
+            {
+                id: 'fiction-connoisseur-lifetime',
+                name: 'Fiction Connoisseur',
+                description: 'Read books from 10 different fiction genres.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 1H11V15H3V1Z" fill="#6366F1"/><path d="M4 2H10V14H4V2Z" fill="#818CF8"/>
+                        <path d="M5 3H9V13H5V3Z" fill="#A5B4FC"/>
+                    </svg>
+                ),
+                condition: (books) => new Set(books.filter(b => b.isFiction).map(b => b.genre)).size >= 10,
+            },
+            {
+                id: 'non-fiction-scholar-lifetime',
+                name: 'Non-Fiction Scholar',
+                description: 'Read books from 10 different non-fiction genres.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 1H11V15H3V1Z" fill="#EC4899"/><path d="M4 2H10V14H4V2Z" fill="#F472B6"/>
+                        <path d="M5 3H9V13H5V3Z" fill="#F9A8D4"/>
+                    </svg>
+                ),
+                condition: (books) => new Set(books.filter(b => !b.isFiction).map(b => b.genre)).size >= 10,
             },
         ];
 
