@@ -123,15 +123,14 @@
             );
         }
 
-        function GoalProgress({ count, goal }) {
+        function GoalProgress({ count, goal, year }) {
             const percentage = Math.min((count / goal) * 100, 100);
             const booksLeft = goal - count;
-            const currentYear = new Date().getFullYear();
 
             return (
                 <div className="max-w-4xl mx-auto mb-6 p-4 bg-gray-800 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-lg font-bold text-white">Your {currentYear} Reading Goal</h3>
+                        <h3 className="text-lg font-bold text-white">Your {year} Reading Goal</h3>
                         <span className="text-lg font-bold text-indigo-400">{count} / {goal}</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-4">
@@ -312,14 +311,10 @@
                 }
             };
 
-            const currentYear = new Date().getFullYear();
-            const booksThisYear = books.filter(b => b.readYear === currentYear);
-
             return (
                 <div className="p-4 md:p-8">
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
-                        {view === 'gallery' && <GoalProgress count={booksThisYear.length} goal={YEARLY_GOAL} />}
                         {view === 'add-single' && <AddBook books={books} onBookAdded={handleBooksChanged} onTbrAdded={handleTbrChanged} onCancel={() => setView('gallery')} />}
                         {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onTbrAdded={handleTbrChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
@@ -340,7 +335,7 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.67</span>
+                        <span className="font-mono text-xs text-gray-500">v0.69</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
@@ -1561,6 +1556,13 @@
 
             return (
                 <div>
+                    {selectedPeriod !== 'All Time' && (
+                        <GoalProgress 
+                            count={displayedBooks.length} 
+                            goal={YEARLY_GOAL} 
+                            year={selectedPeriod} 
+                        />
+                    )}
                     <Lightbox book={lightboxBook} onClose={() => setLightboxBook(null)} />
                     <ConfirmationModal 
                         isOpen={confirmDelete.isOpen}
