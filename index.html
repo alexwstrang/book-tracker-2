@@ -57,8 +57,6 @@
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
         // --- Firebase Configuration ---
-        // This configuration is a placeholder. In a real environment,
-        // these keys would be securely managed.
         const firebaseConfig = {
             apiKey: "AIzaSyCWiDK8pm24MEKDC8DmcR68VwgWKx2j5eM",
             authDomain: "book-tracker-v2.firebaseapp.com",
@@ -68,8 +66,9 @@
             appId: "1:148759504044:web:5332ca5553a0cd2a92ab09"
         };
 
-        // Your Google Books API Key - leave empty if you don't have one
+        // --- App Constants ---
         const GOOGLE_BOOKS_API_KEY = 'AIzaSyAgt0khNLPhJCSonZ_xvwnRewy3xSByLz0';
+        const YEARLY_GOAL = 52;
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -120,6 +119,30 @@
                             <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Confirm</button>
                         </div>
                     </div>
+                </div>
+            );
+        }
+
+        function GoalProgress({ count, goal }) {
+            const percentage = Math.min((count / goal) * 100, 100);
+            const booksLeft = goal - count;
+            const currentYear = new Date().getFullYear();
+
+            return (
+                <div className="max-w-4xl mx-auto mb-6 p-4 bg-gray-800 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-lg font-bold text-white">Your {currentYear} Reading Goal</h3>
+                        <span className="text-lg font-bold text-indigo-400">{count} / {goal}</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-4">
+                        <div
+                            className="bg-indigo-500 h-4 rounded-full transition-all duration-500"
+                            style={{ width: `${percentage}%` }}
+                        ></div>
+                    </div>
+                    <p className="text-right text-sm text-gray-400 mt-2">
+                        {booksLeft > 0 ? `${booksLeft} more to go!` : "Goal achieved! 🎉"}
+                    </p>
                 </div>
             );
         }
@@ -251,10 +274,14 @@
                 setView('gallery');
             };
 
+            const currentYear = new Date().getFullYear();
+            const booksThisYear = books.filter(b => b.readYear === currentYear);
+
             return (
                 <div className="p-4 md:p-8">
                     <Navbar user={user} setView={setView} currentView={view} />
                     <main className="mt-8">
+                        {view === 'gallery' && <GoalProgress count={booksThisYear.length} goal={YEARLY_GOAL} />}
                         {view === 'add-single' && <AddBook books={books} onBookAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
                         {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
