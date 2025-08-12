@@ -333,6 +333,7 @@
                         {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} />}
                         {view === 'tbr' && <TbrDisplay tbrBooks={tbrBooks} loading={loadingBooks} onBookUpdated={fetchTbrBooks} onMarkAsRead={handleMarkAsRead} />}
                         {view === 'search' && <Search books={books} onCancel={() => setView('gallery')} />}
+                        {view === 'achievements' && <Achievements books={books} />}
                     </main>
                 </div>
             );
@@ -347,12 +348,13 @@
                 <header className="flex flex-col md:flex-row justify-between items-center">
                     <div className="flex items-baseline gap-2 mb-4 md:mb-0">
                         <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                        <span className="font-mono text-xs text-gray-500">v0.70</span>
+                        <span className="font-mono text-xs text-gray-500">v0.71</span>
                     </div>
                     <nav className="flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                         <button onClick={() => setView('gallery')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'gallery' ? activeClass : inactiveClass}`}>Books</button>
                         <button onClick={() => setView('tbr')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'tbr' ? activeClass : inactiveClass}`}>TBR</button>
                         <button onClick={() => setView('stats')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'stats' ? activeClass : inactiveClass}`}>Stats</button>
+                        <button onClick={() => setView('achievements')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'achievements' ? activeClass : inactiveClass}`}>Achievements</button>
                         <button onClick={() => setView('search')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'search' ? activeClass : inactiveClass}`}>Search</button>
                         <button onClick={() => setView('add-single')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'add-single' ? activeClass : inactiveClass}`}>+ Add Book</button>
                         <button onClick={() => setView('add-multiple')} className={`px-3 py-2 rounded-md text-sm font-medium ${currentView === 'add-multiple' ? activeClass : inactiveClass}`}>+ Add Multiple</button>
@@ -2006,6 +2008,192 @@
                         <div className="flex justify-end gap-4">
                             <button onClick={onCancel} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancel</button>
                             <button onClick={handleConfirm} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Achievements Component ---
+        const achievementsList = [
+            {
+                id: 'bookworm-yearly',
+                name: 'Bookworm',
+                description: 'Read 10 books in a year.',
+                type: 'yearly',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 1H11V2H12V3H13V13H12V14H11V15H3V1H3Z" fill="#784A2B"/>
+                        <path d="M4 2H11V14H4V2Z" fill="#A46438"/>
+                        <path d="M5 3H10V13H5V3Z" fill="#D1A888"/>
+                        <path d="M6 4H9V12H6V4Z" fill="#EADBC6"/>
+                        <path d="M2 3H3V13H2V3Z" fill="#5E3820"/>
+                    </svg>
+                ),
+                condition: (books) => books.length >= 10,
+            },
+            {
+                id: 'world-traveler-yearly',
+                name: 'World Traveler',
+                description: 'Read books from 5 different countries in a year.',
+                type: 'yearly',
+                badge: (
+                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#60A5FA"/>
+                        <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#3B82F6"/>
+                        <path d="M7 4H6V5H5V6H6V7H5V8H4V9H5V10H7V11H8V12H10V11H11V9H10V8H11V7H12V6H11V5H9V4H7Z" fill="#4ADE80"/>
+                    </svg>
+                ),
+                condition: (books) => new Set(books.map(b => b.country).filter(Boolean)).size >= 5,
+            },
+            {
+                id: 'the-sprinter-yearly',
+                name: 'The Sprinter',
+                description: 'Read 5 books in a single month.',
+                type: 'yearly',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 5H4V4H5V3H11V4H12V5H13V11H12V12H11V13H5V12H4V11H3V5Z" fill="#FBBF24"/>
+                        <path d="M8 6V7H9V8H8V9H7V8H6V7H7V6H8Z" fill="white"/>
+                        <path d="M5 5H4V6H5V5Z" fill="#F59E0B"/>
+                        <path d="M11 5H12V6H11V5Z" fill="#F59E0B"/>
+                        <path d="M5 11H4V10H5V11Z" fill="#F59E0B"/>
+                        <path d="M11 11H12V10H11V11Z" fill="#F59E0B"/>
+                    </svg>
+                ),
+                condition: (books) => {
+                    const monthCounts = books.reduce((acc, book) => {
+                        const month = new Date(book.readDate).getMonth();
+                        acc[month] = (acc[month] || 0) + 1;
+                        return acc;
+                    }, {});
+                    return Object.values(monthCounts).some(count => count >= 5);
+                }
+            },
+            {
+                id: 'the-epic-lifetime',
+                name: 'The Epic',
+                description: 'Finish a book over 750 pages long.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M3 1H12V2H13V3H14V13H13V14H12V15H3V1Z" fill="#4A3A2B"/>
+                        <path d="M4 2H12V14H4V2Z" fill="#785A38"/>
+                        <path d="M5 3H11V13H5V3Z" fill="#A48868"/>
+                        <path d="M6 4H10V12H6V4Z" fill="#D1B898"/>
+                        <path d="M2 3H3V13H2V3Z" fill="#3E3020"/>
+                        <path d="M10 1H11V4H10V1Z" fill="#DC2626"/>
+                    </svg>
+                ),
+                condition: (books) => books.some(b => b.pageCount >= 750),
+            },
+            {
+                id: 'librarian-lifetime',
+                name: 'Librarian',
+                description: 'Log 250 books in total.',
+                type: 'lifetime',
+                badge: (
+                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M2 2H14V14H2V2Z" fill="#A3A3A3"/>
+                        <path d="M3 3H13V13H3V3Z" fill="#D4D4D4"/>
+                        <path d="M4 4H12V12H4V4Z" fill="#F5F5F5"/>
+                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/>
+                        <path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
+                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/>
+                        <path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
+                    </svg>
+                ),
+                condition: (books) => books.length >= 250,
+            },
+             {
+                id: 'loyallist-lifetime',
+                name: 'Loyalist',
+                description: 'Read 10 books by the same author.',
+                type: 'lifetime',
+                badge: (
+                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
+                        <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#FBBF24"/>
+                        <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#F59E0B"/>
+                        <path d="M11 5L10 6L8 4L6 6L5 5L8 2L11 5Z" fill="#FFFFFF"/>
+                        <path d="M8 6L5 9H7V13H9V9H11L8 6Z" fill="#FFFFFF"/>
+                    </svg>
+                ),
+                condition: (books) => {
+                    const authorCounts = books.reduce((acc, book) => {
+                        acc[book.author] = (acc[book.author] || 0) + 1;
+                        return acc;
+                    }, {});
+                    return Object.values(authorCounts).some(count => count >= 10);
+                }
+            },
+        ];
+
+        function Achievements({ books }) {
+            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+            const availableYears = useMemo(() => {
+                const years = new Set(books.map(b => b.readYear).filter(y => y));
+                const currentYear = new Date().getFullYear();
+                years.add(currentYear);
+                return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
+            }, [books]);
+
+            const yearlyAchievements = achievementsList.filter(a => a.type === 'yearly');
+            const lifetimeAchievements = achievementsList.filter(a => a.type === 'lifetime');
+
+            const booksForYear = useMemo(() => {
+                if (selectedYear === 'All Time') return [];
+                return books.filter(b => b.readYear === selectedYear);
+            }, [books, selectedYear]);
+
+            return (
+                <div className="max-w-4xl mx-auto">
+                    <div className="flex items-center gap-4 mb-6">
+                        <h2 className="text-2xl font-bold">Achievements for</h2>
+                        <select value={selectedYear} onChange={e => setSelectedYear(e.target.value === 'All Time' ? 'All Time' : Number(e.target.value))} className="p-2 bg-gray-700 rounded-md">
+                            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    </div>
+
+                    {selectedYear !== 'All Time' && (
+                        <div className="mb-8">
+                            <h3 className="text-xl font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2">Yearly Achievements ({selectedYear})</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {yearlyAchievements.map(ach => {
+                                    const isUnlocked = ach.condition(booksForYear);
+                                    return (
+                                        <div key={ach.id} className={`p-4 rounded-lg flex items-center gap-4 ${isUnlocked ? 'bg-gray-800' : 'bg-gray-800 bg-opacity-50'}`}>
+                                            <div className={!isUnlocked ? 'filter grayscale opacity-50' : ''}>
+                                                {ach.badge}
+                                            </div>
+                                            <div>
+                                                <h3 className={`font-bold ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>{ach.name}</h3>
+                                                <p className="text-sm text-gray-400">{ach.description}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2">Lifetime Achievements</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {lifetimeAchievements.map(ach => {
+                                const isUnlocked = ach.condition(books);
+                                return (
+                                    <div key={ach.id} className={`p-4 rounded-lg flex items-center gap-4 ${isUnlocked ? 'bg-gray-800' : 'bg-gray-800 bg-opacity-50'}`}>
+                                        <div className={!isUnlocked ? 'filter grayscale opacity-50' : ''}>
+                                            {ach.badge}
+                                        </div>
+                                        <div>
+                                            <h3 className={`font-bold ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>{ach.name}</h3>
+                                            <p className="text-sm text-gray-400">{ach.description}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
