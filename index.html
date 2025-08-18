@@ -394,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.78</span>
+                            <span className="font-mono text-xs text-gray-500">v0.81</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -448,34 +448,38 @@
         function BarcodeScanner({ onScanSuccess, onCancel }) {
             useEffect(() => {
                 const html5QrCode = new Html5Qrcode("reader");
-
+        
                 const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                    // **THE FIX:** First, we stop the scanner.
                     html5QrCode.stop()
-                        .then(() => {
-                            onScanSuccess(decodedText);
-                        })
-                        .catch(err => {
-                            console.error("Failed to stop scanner, but proceeding anyway.", err);
+                        .finally(() => {
+                            // **ONLY THEN**, after it has stopped, we tell the main app.
                             onScanSuccess(decodedText);
                         });
                 };
-
+        
                 const config = { fps: 10, qrbox: { width: 250, height: 150 } };
-
+        
                 html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
-                    .catch(err => {
-                        console.error("Unable to start scanning", err);
+                    .catch(err => { 
+                        console.error("Unable to start scanning.", err);
+                        // If starting fails, provide a way to cancel.
+                        onCancel(); 
                     });
-
+        
+                // This cleanup function is a safety net for when the user clicks "Cancel".
                 return () => {
-                    // It's good practice to ensure the scanner is stopped when the component unmounts.
-                    // The library might handle this, but being explicit prevents issues.
-                    html5QrCode.stop().catch(err => {
-                        // Ignore errors here, as the scanner might already be stopped.
-                    });
+                    // Using a try-catch block is safer for cleanup.
+                    try {
+                        if (html5QrCode && html5QrCode.isScanning) {
+                            html5QrCode.stop();
+                        }
+                    } catch (err) {
+                        console.error("Failed to stop scanner during cleanup.", err);
+                    }
                 };
-            }, [onScanSuccess]); // Add onScanSuccess to dependencies to avoid stale closures.
-
+            }, []); // We can use an empty array again because the logic is now self-contained.
+        
             return (
                 <div className="flex flex-col items-center gap-4">
                     <p className="text-sm text-gray-400">Point your camera at the book's barcode</p>
@@ -553,17 +557,10 @@
             }, []);
 
             const handleScanSuccess = useCallback((decodedIsbn) => {
-                // This alert will show us exactly what the scanner is sending.
-                alert(`Scanner produced this code:\n\n${decodedIsbn}`);
-                
-                // We'll put the scanned value in the input box...
-                setIsbn(decodedIsbn);
-                
-                // ...and then switch back to the main form view.
                 setIsScanning(false);
-
-                // We have temporarily removed the automatic search call for debugging.
-            }, []);
+                setIsbn(decodedIsbn);
+                handleIsbnSearch(decodedIsbn);
+            }, [handleIsbnSearch]);
 
             const handleIsbnFormSubmit = (e) => {
                 e.preventDefault();
