@@ -394,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.82</span>
+                            <span className="font-mono text-xs text-gray-500">v0.85</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -1160,7 +1160,7 @@
             );
         }
 
-        // --- Stats Component (MODIFIED) ---
+     // --- Stats Component (MODIFIED) ---
         function Stats({ books, loading }) {
             const [year, setYear] = useState('All Time');
             const [modalData, setModalData] = useState({ isOpen: false, country: '', books: [] });
@@ -1205,7 +1205,6 @@
                     return acc;
                 }, {});
                 
-                // **MODIFICATION:** Calculate top 10 authors instead of just the top one.
                 const topAuthors = Object.entries(authorCounts)
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 10);
@@ -1239,7 +1238,7 @@
 
                 return {
                     total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, fictionGenreCounts, nonFictionGenreCounts,
-                    topAuthors, // **MODIFICATION:** Pass the new topAuthors array
+                    topAuthors,
                     monthlyCounts, pagesPerMonth, averagePageCount, shortestBook, longestBook, uniqueAuthors, booksByDecade, booksByCountry
                 };
             }, [year, books]);
@@ -1416,7 +1415,6 @@
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Avg. Book Length</h3><p className="text-5xl font-bold text-indigo-400">{stats.averagePageCount.toLocaleString()} pgs</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Authors</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueAuthors}</p></div>
                             
-                            {/* **MODIFICATION:** Replaced Most Read Author card with Top 10 Leaderboard */}
                             <div className="md:col-span-2 p-4 bg-gray-800 rounded-lg">
                                 <h3 className="font-bold text-lg mb-4">Top Authors</h3>
                                 {stats.topAuthors.length > 0 ? (
@@ -1436,8 +1434,22 @@
                                 )}
                             </div>
 
-                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.shortestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Shortest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.shortestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p></div></div>
-                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.longestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Longest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.longestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p></div></div>
+                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start">
+                                <img src={stats.shortestBook?.coverUrl} className="w-1/3 h-auto object-cover rounded-md"/>
+                                <div className="flex-grow">
+                                    <h3 className="font-bold text-lg mb-2">Shortest Book</h3>
+                                    <p className="text-xl font-bold text-indigo-400">{stats.shortestBook?.title || 'N/A'}</p>
+                                    <p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start">
+                                <img src={stats.longestBook?.coverUrl} className="w-1/3 h-auto object-cover rounded-md"/>
+                                <div className="flex-grow">
+                                    <h3 className="font-bold text-lg mb-2">Longest Book</h3>
+                                    <p className="text-xl font-bold text-indigo-400">{stats.longestBook?.title || 'N/A'}</p>
+                                    <p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p>
+                                </div>
+                            </div>
                             
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Fiction vs. Non-Fiction</h3><canvas id="pie-chart"></canvas></div>
                             <div className="p-4 bg-gray-800 rounded-lg lg:col-span-2"><h3 className="font-bold text-lg mb-2">Books by Decade</h3><canvas id="decade-chart"></canvas></div>
