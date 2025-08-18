@@ -553,10 +553,17 @@
             }, []);
 
             const handleScanSuccess = useCallback((decodedIsbn) => {
-                setIsScanning(false);
+                // This alert will show us exactly what the scanner is sending.
+                alert(`Scanner produced this code:\n\n${decodedIsbn}`);
+                
+                // We'll put the scanned value in the input box...
                 setIsbn(decodedIsbn);
-                handleIsbnSearch(decodedIsbn);
-            }, [handleIsbnSearch]);
+                
+                // ...and then switch back to the main form view.
+                setIsScanning(false);
+
+                // We have temporarily removed the automatic search call for debugging.
+            }, []);
 
             const handleIsbnFormSubmit = (e) => {
                 e.preventDefault();
