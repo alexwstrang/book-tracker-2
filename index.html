@@ -394,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.81</span>
+                            <span className="font-mono text-xs text-gray-500">v0.82</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -450,10 +450,8 @@
                 const html5QrCode = new Html5Qrcode("reader");
         
                 const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-                    // **THE FIX:** First, we stop the scanner.
                     html5QrCode.stop()
                         .finally(() => {
-                            // **ONLY THEN**, after it has stopped, we tell the main app.
                             onScanSuccess(decodedText);
                         });
                 };
@@ -463,13 +461,10 @@
                 html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
                     .catch(err => { 
                         console.error("Unable to start scanning.", err);
-                        // If starting fails, provide a way to cancel.
                         onCancel(); 
                     });
         
-                // This cleanup function is a safety net for when the user clicks "Cancel".
                 return () => {
-                    // Using a try-catch block is safer for cleanup.
                     try {
                         if (html5QrCode && html5QrCode.isScanning) {
                             html5QrCode.stop();
@@ -478,7 +473,7 @@
                         console.error("Failed to stop scanner during cleanup.", err);
                     }
                 };
-            }, []); // We can use an empty array again because the logic is now self-contained.
+            }, []);
         
             return (
                 <div className="flex flex-col items-center gap-4">
@@ -497,7 +492,7 @@
             );
         }
 
-    // --- Add Single Book Component ---
+        // --- Add Single Book Component ---
         function AddBook({ books, onBookAdded, onTbrAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
@@ -507,16 +502,10 @@
             const [readYear, setReadYear] = useState(new Date().getFullYear());
             const [isAddingNewGenre, setIsAddingNewGenre] = useState(false);
             const [isManualAdd, setIsManualAdd] = useState(false);
-            const [listType, setListType] = useState('read'); // 'read' or 'tbr'
+            const [listType, setListType] = useState('read');
             const [isScanning, setIsScanning] = useState(false);
             const [manualFormData, setManualFormData] = useState({
-                title: '',
-                author: '',
-                isFiction: true,
-                genre: '',
-                pageCount: 0,
-                coverUrl: '',
-                country: '',
+                title: '', author: '', isFiction: true, genre: '', pageCount: 0, coverUrl: '', country: '',
             });
 
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
@@ -534,7 +523,6 @@
                     const data = await response.json();
                     if (data.totalItems > 0) {
                         const book = data.items[0].volumeInfo;
-                        // **FIX:** Create a safe title variable first to prevent crash if book.title is undefined.
                         const title = book.title || 'No Title Provided';
                         setBookData({
                             title: title,
@@ -1111,7 +1099,6 @@
             if (!isOpen) return null;
 
             const sortedBooks = useMemo(() => {
-                // Sort books by readDate in descending order (most recent first)
                 return [...books].sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
             }, [books]);
 
@@ -1173,16 +1160,16 @@
             );
         }
 
-        // --- Stats Component ---
+        // --- Stats Component (MODIFIED) ---
         function Stats({ books, loading }) {
             const [year, setYear] = useState('All Time');
             const [modalData, setModalData] = useState({ isOpen: false, country: '', books: [] });
             const [decadeModalData, setDecadeModalData] = useState({ isOpen: false, decade: '', books: [] });
             
             const availableYears = useMemo(() => {
-                const years = new Set(books.map(b => b.readYear).filter(y => y)); // Filter out any null/undefined years
+                const years = new Set(books.map(b => b.readYear).filter(y => y));
                 const currentYear = new Date().getFullYear();
-                years.add(currentYear); // Ensure the current year is always available as an option
+                years.add(currentYear);
                 return ['All Time', ...Array.from(years).sort((a, b) => b - a)];
             }, [books]);
 
@@ -1217,7 +1204,12 @@
                     acc[book.author] = (acc[book.author] || 0) + 1;
                     return acc;
                 }, {});
-                const mostReadAuthor = Object.entries(authorCounts).sort((a, b) => b[1] - a[1])[0];
+                
+                // **MODIFICATION:** Calculate top 10 authors instead of just the top one.
+                const topAuthors = Object.entries(authorCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+
                 const uniqueAuthors = new Set(filteredBooks.map(b => b.author)).size;
 
                 const monthlyCounts = Array(12).fill(0);
@@ -1245,10 +1237,9 @@
                     return acc;
                 }, {});
 
-
                 return {
                     total: filteredBooks.length, totalPagesRead, fictionCount, nonfictionCount, fictionGenreCounts, nonFictionGenreCounts,
-                    mostReadAuthor: mostReadAuthor ? `${mostReadAuthor[0]} (${mostReadAuthor[1]} books)` : 'N/A',
+                    topAuthors, // **MODIFICATION:** Pass the new topAuthors array
                     monthlyCounts, pagesPerMonth, averagePageCount, shortestBook, longestBook, uniqueAuthors, booksByDecade, booksByCountry
                 };
             }, [year, books]);
@@ -1327,8 +1318,8 @@
                                 onClick: (event, elements, chart) => {
                                     if (elements.length > 0) {
                                         const elementIndex = elements[0].index;
-                                        const clickedDecadeLabel = chart.data.labels[elementIndex]; // "1990s"
-                                        const clickedDecade = parseInt(clickedDecadeLabel); // 1990
+                                        const clickedDecadeLabel = chart.data.labels[elementIndex];
+                                        const clickedDecade = parseInt(clickedDecadeLabel);
                                         const filteredBooks = year === 'All Time' ? books : books.filter(b => b.readYear === year);
                                         const booksFromDecade = filteredBooks.filter(book => book.publicationYear && Math.floor(book.publicationYear / 10) * 10 === clickedDecade);
                                         
@@ -1425,7 +1416,26 @@
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Avg. Book Length</h3><p className="text-5xl font-bold text-indigo-400">{stats.averagePageCount.toLocaleString()} pgs</p></div>
                             <div className="p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Unique Authors</h3><p className="text-5xl font-bold text-indigo-400">{stats.uniqueAuthors}</p></div>
                             
-                            <div className="md:col-span-2 p-4 bg-gray-800 rounded-lg"><h3 className="font-bold text-lg mb-2">Most Read Author</h3><p className="text-3xl font-bold text-indigo-400">{stats.mostReadAuthor}</p></div>
+                            {/* **MODIFICATION:** Replaced Most Read Author card with Top 10 Leaderboard */}
+                            <div className="md:col-span-2 p-4 bg-gray-800 rounded-lg">
+                                <h3 className="font-bold text-lg mb-4">Top Authors</h3>
+                                {stats.topAuthors.length > 0 ? (
+                                    <ol className="space-y-3">
+                                        {stats.topAuthors.map(([author, count], index) => (
+                                            <li key={author} className="flex justify-between items-baseline text-sm">
+                                                <span className="flex items-center truncate">
+                                                    <span className="text-gray-400 font-bold w-7 text-left">{index + 1}.</span>
+                                                    <span className="text-white truncate" title={author}>{author}</span>
+                                                </span>
+                                                <span className="font-mono text-indigo-400 flex-shrink-0 ml-2">{count} {count > 1 ? 'books' : 'book'}</span>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                ) : (
+                                    <p className="text-gray-400">No authors to display.</p>
+                                )}
+                            </div>
+
                             <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.shortestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Shortest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.shortestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.shortestBook?.pageCount} pgs</p></div></div>
                             <div className="p-4 bg-gray-800 rounded-lg flex gap-4 items-start"><img src={stats.longestBook?.coverUrl} className="w-20 h-auto object-cover rounded-md flex-shrink-0"/><div className="flex-grow"><h3 className="font-bold text-lg mb-2">Longest Book</h3><p className="text-xl font-bold text-indigo-400">{stats.longestBook?.title || 'N/A'}</p><p className="text-sm text-gray-400">{stats.longestBook?.pageCount} pgs</p></div></div>
                             
@@ -1507,7 +1517,7 @@
                 }
 
                 if (selectedPeriod === 'All Time') {
-                     filteredBooks.sort((a, b) => new Date(b.readDate) - new Date(a.readDate)); // Sort by most recent for All Time view
+                     filteredBooks.sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
                 }
                 
                 setDisplayedBooks(filteredBooks);
@@ -1729,7 +1739,6 @@
 
             return (
                 <div>
-                    {/* Floating Action Button for mobile */}
                     <button
                         onClick={() => setView('add-single')}
                         className="md:hidden fixed bottom-6 right-6 bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
@@ -1794,7 +1803,7 @@
                                 </button>
                             ))}
                         </div>
-                    ) : isBulkEditing ? ( // BULK EDIT VIEW
+                    ) : isBulkEditing ? (
                          <div className="space-y-3">
                          {bulkEditData.map((book, index) => (
                              <div key={book.id} className="p-3 bg-gray-700 rounded-lg space-y-3">
@@ -1885,7 +1894,7 @@
                              </div>
                          ))}
                          </div>
-                    ) : ( // REGULAR LIST VIEW
+                    ) : (
                         <div className="space-y-4 md:space-y-0 md:border-separate md:min-w-full" style={{ borderSpacing: '0 0.75rem' }}>
                             <div className="hidden md:table-header-group">
                                 <div className="md:table-row">
@@ -2197,7 +2206,6 @@
 
         // --- Achievements Component ---
         const achievementsList = [
-            // Yearly
             {
                 id: 'bookworm-yearly', name: 'Bookworm', description: 'Read 10 books in a year.', type: 'yearly',
                 badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H11V2H12V3H13V13H12V14H11V15H3V1H3Z" fill="#784A2B"/> <path d="M4 2H11V14H4V2Z" fill="#A46438"/> <path d="M5 3H10V13H5V3Z" fill="#D1A888"/> <path d="M6 4H9V12H6V4Z" fill="#EADBC6"/> <path d="M2 3H3V13H2V3Z" fill="#5E3820"/> </svg> ),
@@ -2231,7 +2239,6 @@
                 badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M8 4C9.1 4 10 4.9 10 6C10 7.1 9.1 8 8 8C6.9 8 6 7.1 6 6C6 4.9 6.9 4 8 4Z" fill="#FBBF24"/> <path d="M8 2V3H9V4H10V5H11V6H12V8H11V9H10V10H9V11H8V12H7V11H6V10H5V9H4V8H5V6H6V5H7V4H8V2Z" fill="#FDE047"/> </svg> ),
                 condition: (books) => books.filter(b => [5, 6, 7].includes(new Date(b.readDate).getMonth())).length >= 10,
             },
-            // Lifetime
             {
                 id: 'the-epic-lifetime', name: 'The Epic', description: 'Finish a book over 750 pages long.', type: 'lifetime',
                 badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H12V2H13V3H14V13H13V14H12V15H3V1Z" fill="#4A3A2B"/> <path d="M4 2H12V14H4V2Z" fill="#785A38"/> <path d="M5 3H11V13H5V3Z" fill="#A48868"/> <path d="M6 4H10V12H6V4Z" fill="#D1B898"/> <path d="M2 3H3V13H2V3Z" fill="#3E3020"/> <path d="M10 1H11V4H10V1Z" fill="#DC2626"/> </svg> ),
