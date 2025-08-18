@@ -394,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.77</span>
+                            <span className="font-mono text-xs text-gray-500">v0.78</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -468,9 +468,13 @@
                     });
 
                 return () => {
-                    html5QrCode.stop().catch(err => {});
+                    // It's good practice to ensure the scanner is stopped when the component unmounts.
+                    // The library might handle this, but being explicit prevents issues.
+                    html5QrCode.stop().catch(err => {
+                        // Ignore errors here, as the scanner might already be stopped.
+                    });
                 };
-            }, []);
+            }, [onScanSuccess]); // Add onScanSuccess to dependencies to avoid stale closures.
 
             return (
                 <div className="flex flex-col items-center gap-4">
@@ -489,7 +493,7 @@
             );
         }
 
-    // --- Add Single Book Component (FIXED) ---
+    // --- Add Single Book Component ---
         function AddBook({ books, onBookAdded, onTbrAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
@@ -526,20 +530,23 @@
                     const data = await response.json();
                     if (data.totalItems > 0) {
                         const book = data.items[0].volumeInfo;
+                        // **FIX:** Create a safe title variable first to prevent crash if book.title is undefined.
+                        const title = book.title || 'No Title Provided';
                         setBookData({
-                            title: book.title || 'N/A',
+                            title: title,
                             author: book.authors ? book.authors.join(', ') : 'N/A',
                             isFiction: !isNonFiction(book.categories),
                             genre: parseGenre(book.categories),
                             pageCount: book.pageCount || 0,
                             publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
-                            coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${book.title.split(' ').join('+')}`,
+                            coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${title.split(' ').join('+')}`,
                             country: '',
                         });
                     } else {
                         setError('Book not found for this ISBN.');
                     }
                 } catch (err) {
+                    console.error("API Fetch Error:", err);
                     setError('Failed to fetch book data. Please check the ISBN and your connection.');
                 }
                 setLoading(false);
@@ -905,15 +912,16 @@
                         const data = await response.json();
                         if (data.totalItems > 0) {
                             const book = data.items[0].volumeInfo;
+                            const title = book.title || 'No Title Provided';
                             return {
                                 isbn,
-                                title: book.title || 'N/A',
+                                title: title,
                                 author: book.authors ? book.authors.join(', ') : 'N/A',
                                 isFiction: !isNonFiction(book.categories),
                                 genre: parseGenre(book.categories),
                                 pageCount: book.pageCount || 0,
                                 publicationYear: book.publishedDate ? new Date(book.publishedDate).getFullYear() : 'N/A',
-                                coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${book.title.split(' ').join('+')}`,
+                                coverUrl: book.imageLinks?.thumbnail || `https://placehold.co/128x192/1f2937/ffffff?text=${title.split(' ').join('+')}`,
                                 readMonth: new Date().getMonth(),
                                 readYear: new Date().getFullYear(),
                                 country: '',
