@@ -19,13 +19,48 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
     <style>
-        /* Simple body style to match the theme */
         body {
             background-color: #111827; /* bg-gray-900 */
         }
         .dragging {
             opacity: 0.5;
+        }
+
+        /* --- Custom Styles for the Barcode Scanner --- */
+        .scanner-viewfinder {
+            position: relative;
+            width: 300px;
+            height: 225px; /* 4:3 aspect ratio */
+            overflow: hidden;
+            border-radius: 0.5rem; /* rounded-lg */
+            border: 2px dashed #4b5563; /* border-gray-600 */
+        }
+
+        .scanner-viewfinder #reader {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #818cf8, transparent);
+            box-shadow: 0 0 10px #818cf8;
+            animation: scan 2.5s infinite ease-in-out;
+            border-radius: 9999px;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(5px); }
+            50% { transform: translateY(calc(225px - 8px)); }
+            100% { transform: translateY(5px); }
         }
     </style>
 </head>
@@ -157,7 +192,7 @@
                 </div>
             );
         }
-
+        
         // --- Main App Component ---
         function App() {
             const [user, setUser] = useState(null);
@@ -339,7 +374,7 @@
             );
         }
 
-        // --- Navbar Component (UPDATED FOR MOBILE) ---
+        // --- Navbar Component ---
         function Navbar({ user, setView, currentView }) {
             const [isMenuOpen, setIsMenuOpen] = useState(false);
             const activeClass = "bg-indigo-600 text-white";
@@ -359,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.74</span>
+                            <span className="font-mono text-xs text-gray-500">v0.75</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -408,6 +443,45 @@
                 </header>
             );
         }
+        
+        // --- Barcode Scanner Component ---
+        function BarcodeScanner({ onScanSuccess, onCancel }) {
+            useEffect(() => {
+                const html5QrCode = new Html5Qrcode("reader");
+
+                const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                    onScanSuccess(decodedText);
+                    html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+                };
+
+                const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+
+                html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+                    .catch(err => {
+                        console.error("Unable to start scanning", err);
+                    });
+
+                return () => {
+                    html5QrCode.stop().catch(err => {});
+                };
+            }, []);
+
+            return (
+                <div className="flex flex-col items-center gap-4">
+                    <p className="text-sm text-gray-400">Point your camera at the book's barcode</p>
+                    <div className="scanner-viewfinder">
+                        <div id="reader"></div>
+                        <div className="scanner-scan-line"></div>
+                    </div>
+                    <button
+                        onClick={onCancel}
+                        className="w-full max-w-xs px-4 py-2 font-bold bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                        Cancel Scan
+                    </button>
+                </div>
+            );
+        }
 
         // --- Add Single Book Component ---
         function AddBook({ books, onBookAdded, onTbrAdded, onCancel }) {
@@ -420,6 +494,7 @@
             const [isAddingNewGenre, setIsAddingNewGenre] = useState(false);
             const [isManualAdd, setIsManualAdd] = useState(false);
             const [listType, setListType] = useState('read'); // 'read' or 'tbr'
+            const [isScanning, setIsScanning] = useState(false);
             const [manualFormData, setManualFormData] = useState({
                 title: '',
                 author: '',
@@ -433,14 +508,13 @@
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
 
-            const handleIsbnSearch = async (e) => {
-                e.preventDefault();
+            const handleIsbnSearch = useCallback(async (searchIsbn) => {
                 setLoading(true);
                 setError('');
                 setBookData(null);
                 setIsManualAdd(false);
                 try {
-                    const sanitized = sanitizeIsbn(isbn);
+                    const sanitized = sanitizeIsbn(searchIsbn);
                     const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${sanitized}${GOOGLE_BOOKS_API_KEY ? '&key=' + GOOGLE_BOOKS_API_KEY : ''}`;
                     const response = await fetch(url);
                     const data = await response.json();
@@ -463,6 +537,17 @@
                     setError('Failed to fetch book data. Please check the ISBN and your connection.');
                 }
                 setLoading(false);
+            }, []);
+
+            const handleScanSuccess = (decodedIsbn) => {
+                setIsScanning(false);
+                setIsbn(decodedIsbn);
+                handleIsbnSearch(decodedIsbn);
+            };
+
+            const handleIsbnFormSubmit = (e) => {
+                e.preventDefault();
+                handleIsbnSearch(isbn);
             };
 
             const handleAddBook = async (e) => {
@@ -602,157 +687,172 @@
             return (
                 <div className="max-w-2xl mx-auto p-6 bg-gray-800 rounded-lg">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold">{isManualAdd ? 'Add Book Manually' : 'Add a New Book'}</h2>
-                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
+                        <h2 className="text-xl font-bold">{isScanning ? 'Scan Book Barcode' : (isManualAdd ? 'Add Book Manually' : 'Add a New Book')}</h2>
+                        <button onClick={isScanning ? () => setIsScanning(false) : onCancel} className="text-gray-400 hover:text-white">&times;</button>
                     </div>
 
-                    <div className="flex justify-center gap-4 mb-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="listType" value="read" checked={listType === 'read'} onChange={() => setListType('read')} className="form-radio text-indigo-500" />
-                            <span>Add to Library</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="listType" value="tbr" checked={listType === 'tbr'} onChange={() => setListType('tbr')} className="form-radio text-indigo-500" />
-                            <span>Add to TBR</span>
-                        </label>
-                    </div>
-
-                    {!isManualAdd && (
-                        <form onSubmit={handleIsbnSearch} className="flex gap-2 mb-4">
-                            <input
-                                type="text"
-                                value={isbn}
-                                onChange={(e) => setIsbn(e.target.value)}
-                                placeholder="Enter 10 or 13-digit ISBN"
-                                className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                            <button type="submit" disabled={loading} className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-500">
-                                {loading ? 'Searching...' : 'Find Book'}
-                            </button>
-                        </form>
-                    )}
-
-                    {error && <p className="text-red-400 mb-4">{error}</p>}
-
-                    {error === 'Book not found for this ISBN.' && !bookData && !isManualAdd && (
-                        <div className="text-center">
-                            <button onClick={handleToggleManualAdd} className="px-4 py-2 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">
-                                Add Manually
-                            </button>
-                        </div>
-                    )}
-
-                    {isManualAdd && (
-                         <form onSubmit={handleSaveManualBook} className="space-y-4">
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-400">Title*</label>
-                                     <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                 </div>
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-400">Author*</label>
-                                     <input type="text" name="author" value={manualFormData.author} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                 </div>
-                             </div>
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-400">Cover Image URL</label>
-                                 <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                             </div>
-                             {listType === 'read' && (
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                     <div className="flex gap-2 mt-1">
-                                         <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
-                                             {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                         </select>
-                                         <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
-                                     </div>
-                                 </div>
-                             )}
-                             <div className="grid grid-cols-2 gap-4">
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-400">Type</label>
-                                     <select name="isFiction" value={manualFormData.isFiction} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                         <option value="true">Fiction</option>
-                                         <option value="false">Non-Fiction</option>
-                                     </select>
-                                 </div>
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-400">Pages</label>
-                                     <input type="number" name="pageCount" value={manualFormData.pageCount} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                 </div>
-                             </div>
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                 <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                     <option value="" disabled>Select a genre</option>
-                                     {(manualFormData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
-                                     <option value="add-new">--- Add New Genre ---</option>
-                                 </select>
-                                 {isAddingNewGenre && (
-                                     <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
-                                 )}
-                             </div>
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-400">Author's Country</label>
-                                 <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                             </div>
-                             <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
-                         </form>
-                    )}
-
-                    {bookData && !isManualAdd && (
-                        <form onSubmit={handleAddBook}>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                                <div className="md:col-span-1">
-                                    <img src={bookData.coverUrl} alt={bookData.title} className="w-full h-auto object-cover rounded-md shadow-lg" />
-                                </div>
-                                <div className="md:col-span-2 space-y-4">
-                                    <h3 className="text-2xl font-bold">{bookData.title}</h3>
-                                    <p className="text-gray-400">by {bookData.author}</p>
-                                    {listType === 'read' && (
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                            <div className="flex gap-2 mt-1">
-                                                <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
-                                                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                                </select>
-                                                <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-400">Type</label>
-                                            <select name="isFiction" value={bookData.isFiction} onChange={e => handleBookDataChange({ target: { name: 'isFiction', value: e.target.value === 'true' }})} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                                <option value="true">Fiction</option>
-                                                <option value="false">Non-Fiction</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-400">Pages</label>
-                                            <input type="number" name="pageCount" value={bookData.pageCount} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                        <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                            <option value={bookData.genre} disabled>{bookData.genre}</option>
-                                            {(bookData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
-                                            <option value="add-new">--- Add New Genre ---</option>
-                                        </select>
-                                        {isAddingNewGenre && (
-                                            <input type="text" name="genre" placeholder="New Genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-400">Author's Country</label>
-                                        <input type="text" name="country" value={bookData.country} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                    </div>
-                                    <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
-                                </div>
+                    {isScanning ? (
+                        <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />
+                    ) : (
+                        <>
+                            <div className="flex justify-center gap-4 mb-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="listType" value="read" checked={listType === 'read'} onChange={() => setListType('read')} className="form-radio text-indigo-500" />
+                                    <span>Add to Library</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="listType" value="tbr" checked={listType === 'tbr'} onChange={() => setListType('tbr')} className="form-radio text-indigo-500" />
+                                    <span>Add to TBR</span>
+                                </label>
                             </div>
-                        </form>
+
+                            {!isManualAdd && (
+                                <div className="space-y-3 mb-4">
+                                    <form onSubmit={handleIsbnFormSubmit} className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={isbn}
+                                            onChange={(e) => setIsbn(e.target.value)}
+                                            placeholder="Enter 10 or 13-digit ISBN"
+                                            className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                        <button type="submit" disabled={loading} className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-500">
+                                            {loading ? 'Searching...' : 'Find Book'}
+                                        </button>
+                                    </form>
+                                    <button 
+                                        onClick={() => setIsScanning(true)} 
+                                        className="w-full py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-500 flex items-center justify-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /><path d="M3 8V4m0 12v4m18-4v4m0-12V4" /></svg>
+                                        Scan Barcode
+                                    </button>
+                                </div>
+                            )}
+
+                            {error && <p className="text-red-400 mb-4">{error}</p>}
+
+                            {error === 'Book not found for this ISBN.' && !bookData && !isManualAdd && (
+                                <div className="text-center">
+                                    <button onClick={handleToggleManualAdd} className="px-4 py-2 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">
+                                        Add Manually
+                                    </button>
+                                </div>
+                            )}
+
+                            {isManualAdd && (
+                                 <form onSubmit={handleSaveManualBook} className="space-y-4">
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                         <div>
+                                             <label className="block text-sm font-medium text-gray-400">Title*</label>
+                                             <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                         </div>
+                                         <div>
+                                             <label className="block text-sm font-medium text-gray-400">Author*</label>
+                                             <input type="text" name="author" value={manualFormData.author} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                         </div>
+                                     </div>
+                                     <div>
+                                         <label className="block text-sm font-medium text-gray-400">Cover Image URL</label>
+                                         <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                     </div>
+                                     {listType === 'read' && (
+                                         <div>
+                                             <label className="block text-sm font-medium text-gray-400">Date Read</label>
+                                             <div className="flex gap-2 mt-1">
+                                                 <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                                     {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                 </select>
+                                                 <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                             </div>
+                                         </div>
+                                     )}
+                                     <div className="grid grid-cols-2 gap-4">
+                                         <div>
+                                             <label className="block text-sm font-medium text-gray-400">Type</label>
+                                             <select name="isFiction" value={manualFormData.isFiction} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                                 <option value="true">Fiction</option>
+                                                 <option value="false">Non-Fiction</option>
+                                             </select>
+                                         </div>
+                                         <div>
+                                             <label className="block text-sm font-medium text-gray-400">Pages</label>
+                                             <input type="number" name="pageCount" value={manualFormData.pageCount} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                         </div>
+                                     </div>
+                                     <div>
+                                         <label className="block text-sm font-medium text-gray-400">Genre</label>
+                                         <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                             <option value="" disabled>Select a genre</option>
+                                             {(manualFormData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                             <option value="add-new">--- Add New Genre ---</option>
+                                         </select>
+                                         {isAddingNewGenre && (
+                                             <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
+                                         )}
+                                     </div>
+                                     <div>
+                                         <label className="block text-sm font-medium text-gray-400">Author's Country</label>
+                                         <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                     </div>
+                                     <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
+                                  </form>
+                            )}
+
+                            {bookData && !isManualAdd && (
+                                <form onSubmit={handleAddBook}>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                                        <div className="md:col-span-1">
+                                            <img src={bookData.coverUrl} alt={bookData.title} className="w-full h-auto object-cover rounded-md shadow-lg" />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-4">
+                                            <h3 className="text-2xl font-bold">{bookData.title}</h3>
+                                            <p className="text-gray-400">by {bookData.author}</p>
+                                            {listType === 'read' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-400">Date Read</label>
+                                                    <div className="flex gap-2 mt-1">
+                                                        <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                        </select>
+                                                        <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-400">Type</label>
+                                                    <select name="isFiction" value={bookData.isFiction} onChange={e => handleBookDataChange({ target: { name: 'isFiction', value: e.target.value === 'true' }})} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                                        <option value="true">Fiction</option>
+                                                        <option value="false">Non-Fiction</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-400">Pages</label>
+                                                    <input type="number" name="pageCount" value={bookData.pageCount} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-400">Genre</label>
+                                                <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                                    <option value={bookData.genre} disabled>{bookData.genre}</option>
+                                                    {(bookData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                                    <option value="add-new">--- Add New Genre ---</option>
+                                                </select>
+                                                {isAddingNewGenre && (
+                                                    <input type="text" name="genre" placeholder="New Genre" value={bookData.genre} onChange={handleBookDataChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-400">Author's Country</label>
+                                                <input type="text" name="country" value={bookData.country} onChange={handleBookDataChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                            </div>
+                                            <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            )}
+                        </>
                     )}
                 </div>
             );
@@ -953,17 +1053,17 @@
                                                     </div>
                                                 )}
                                                 <div className="grid grid-cols-2 gap-2">
-                                                     <div>
+                                                      <div>
                                                         <label className="block text-xs font-medium text-gray-400">Type</label>
                                                         <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
                                                             <option value="true">Fiction</option>
                                                             <option value="false">Non-Fiction</option>
                                                         </select>
-                                                    </div>
-                                                   <div>
+                                                      </div>
+                                                     <div>
                                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
                                                         <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                    </div>
+                                                      </div>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
@@ -981,7 +1081,7 @@
                                     )}
                                 </div>
                             ))}
-                                 <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All Books</button>
+                                  <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All Books</button>
                         </div>
                     )}
                 </div>
@@ -1354,8 +1454,8 @@
             );
         }
 
-        // --- Books Display (Gallery + List) Component (UPDATED FOR MOBILE)---
-        function BooksDisplay({ books, loading, onBookUpdated, setView /* Pass setView for FAB */ }) {
+        // --- Books Display (Gallery + List) Component ---
+        function BooksDisplay({ books, loading, onBookUpdated, setView }) {
             const [viewMode, setViewMode] = useState('list');
             const [displayedBooks, setDisplayedBooks] = useState([]);
             const [editingBookId, setEditingBookId] = useState(null);
@@ -1680,96 +1780,95 @@
                          <div className="space-y-3">
                          {bulkEditData.map((book, index) => (
                              <div key={book.id} className="p-3 bg-gray-700 rounded-lg space-y-3">
-                                <div className="grid grid-cols-1 md:grid-cols-10 gap-x-4 gap-y-2 items-end">
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-medium text-gray-400">Title</label>
-                                        <input type="text" value={book.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-medium text-gray-400">Author</label>
-                                        <input type="text" value={book.author || ''} onChange={(e) => handleBulkEditChange(index, 'author', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-400">Country</label>
+                                 <div className="grid grid-cols-1 md:grid-cols-10 gap-x-4 gap-y-2 items-end">
+                                     <div className="md:col-span-2">
+                                         <label className="block text-xs font-medium text-gray-400">Title</label>
+                                         <input type="text" value={book.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                     </div>
+                                     <div className="md:col-span-2">
+                                         <label className="block text-xs font-medium text-gray-400">Author</label>
+                                         <input type="text" value={book.author || ''} onChange={(e) => handleBulkEditChange(index, 'author', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                     </div>
+                                     <div>
+                                         <label className="block text-xs font-medium text-gray-400">Country</label>
+                                          <select
+                                             value={book.isAddingNewCountry ? 'add-new' : book.country}
+                                             onChange={(e) => handleBulkEditChange(index, 'countrySelect', e.target.value)}
+                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                         >
+                                             <option value={book.country} disabled>{book.country || 'Select Country'}</option>
+                                             {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                                             <option value="add-new">--- Add New ---</option>
+                                         </select>
+                                         {book.isAddingNewCountry && (
+                                             <input
+                                                 type="text"
+                                                 placeholder="New Country"
+                                                 value={book.country}
+                                                 onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)}
+                                                 className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                             />
+                                         )}
+                                     </div>
+                                     <div>
+                                         <label className="block text-xs font-medium text-gray-400">Type</label>
                                          <select
-                                            value={book.isAddingNewCountry ? 'add-new' : book.country}
-                                            onChange={(e) => handleBulkEditChange(index, 'countrySelect', e.target.value)}
-                                            className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                        >
-                                            <option value={book.country} disabled>{book.country || 'Select Country'}</option>
-                                            {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
-                                            <option value="add-new">--- Add New ---</option>
-                                        </select>
-                                        {book.isAddingNewCountry && (
-                                            <input
-                                                type="text"
-                                                placeholder="New Country"
-                                                value={book.country}
-                                                onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)}
-                                                className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
-                                            />
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-400">Type</label>
-                                        <select
-                                            value={book.isFiction}
-                                            onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value)}
-                                            className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                        >
-                                            <option value={true}>Fiction</option>
-                                            <option value={false}>Non-Fiction</option>
-                                        </select>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                         <select
-                                            value={book.isAddingNewGenre ? 'add-new' : book.genre}
-                                            onChange={(e) => handleBulkEditChange(index, 'genreSelect', e.target.value)}
-                                            className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                        >
-                                            <option value={book.genre} disabled>{book.genre || 'Select Genre'}</option>
-                                            {(book.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
-                                            <option value="add-new">--- Add New ---</option>
-                                        </select>
-                                        {book.isAddingNewGenre && (
-                                            <input
-                                                type="text"
-                                                placeholder="New Genre"
-                                                value={book.genre}
-                                                onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)}
-                                                className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
-                                            />
-                                        )}
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-400">Month</label>
-                                            <select
-                                                value={book.readMonth ?? 0}
-                                                onChange={(e) => handleBulkEditChange(index, 'readMonth', parseInt(e.target.value))}
-                                                className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                            >
-                                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-400">Pages</label>
-                                        <input
-                                            type="number"
-                                            value={book.pageCount || 0}
-                                            onChange={(e) => handleBulkEditChange(index, 'pageCount', parseInt(e.target.value) || 0)}
-                                            className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                             value={book.isFiction}
+                                             onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value)}
+                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                         >
+                                             <option value={true}>Fiction</option>
+                                             <option value={false}>Non-Fiction</option>
+                                         </select>
+                                     </div>
+                                     <div className="md:col-span-2">
+                                         <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                          <select
+                                             value={book.isAddingNewGenre ? 'add-new' : book.genre}
+                                             onChange={(e) => handleBulkEditChange(index, 'genreSelect', e.target.value)}
+                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                         >
+                                             <option value={book.genre} disabled>{book.genre || 'Select Genre'}</option>
+                                             {(book.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                             <option value="add-new">--- Add New ---</option>
+                                         </select>
+                                         {book.isAddingNewGenre && (
+                                             <input
+                                                 type="text"
+                                                 placeholder="New Genre"
+                                                 value={book.genre}
+                                                 onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)}
+                                                 className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                             />
+                                         )}
+                                     </div>
+                                     <div className="flex gap-1">
+                                         <div>
+                                             <label className="block text-xs font-medium text-gray-400">Month</label>
+                                             <select
+                                                 value={book.readMonth ?? 0}
+                                                 onChange={(e) => handleBulkEditChange(index, 'readMonth', parseInt(e.target.value))}
+                                                 className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                             >
+                                                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                             </select>
+                                         </div>
+                                     </div>
+                                     <div>
+                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                         <input
+                                             type="number"
+                                             value={book.pageCount || 0}
+                                             onChange={(e) => handleBulkEditChange(index, 'pageCount', parseInt(e.target.value) || 0)}
+                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                         />
+                                     </div>
+                                 </div>
+                             </div>
                          ))}
                          </div>
-                    ) : ( // REGULAR LIST VIEW (MOBILE CARDS + DESKTOP TABLE)
+                    ) : ( // REGULAR LIST VIEW
                         <div className="space-y-4 md:space-y-0 md:border-separate md:min-w-full" style={{ borderSpacing: '0 0.75rem' }}>
-                            {/* Desktop Headers (Hidden on Mobile) */}
                             <div className="hidden md:table-header-group">
                                 <div className="md:table-row">
                                     <div className="md:table-cell w-[4%] px-3 py-2 text-xs font-bold text-gray-400 uppercase text-center">#</div>
@@ -1784,7 +1883,6 @@
                                 </div>
                             </div>
                             
-                            {/* Book Rows */}
                             <div className="md:table-row-group">
                             {displayedBooks.map((book, index) => {
                                 const isEditing = editingBookId === book.id;
@@ -1802,8 +1900,8 @@
                                              <div>
                                                  <label className="block text-xs font-medium text-gray-400">Type</label>
                                                  <select name="isFiction" value={editFormData.isFiction} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                     <option value={true}>Fiction</option>
-                                                     <option value={false}>Non-Fiction</option>
+                                                      <option value={true}>Fiction</option>
+                                                      <option value={false}>Non-Fiction</option>
                                                  </select>
                                              </div>
                                              <div>
@@ -1842,8 +1940,8 @@
                                              </div>
                                         </div>
                                         <div className="flex justify-end gap-2">
-                                             <button onClick={() => handleSaveEdit(book.id)} className="px-3 py-1 text-xs rounded bg-green-600 text-white">Save</button>
-                                             <button onClick={handleCancelEdit} className="px-3 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
+                                            <button onClick={() => handleSaveEdit(book.id)} className="px-3 py-1 text-xs rounded bg-green-600 text-white">Save</button>
+                                            <button onClick={handleCancelEdit} className="px-3 py-1 text-xs rounded bg-gray-600 text-white">Cancel</button>
                                         </div>
                                     </div></div></div>
                                 ) : (
@@ -2083,221 +2181,83 @@
         const achievementsList = [
             // Yearly
             {
-                id: 'bookworm-yearly',
-                name: 'Bookworm',
-                description: 'Read 10 books in a year.',
-                type: 'yearly',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 1H11V2H12V3H13V13H12V14H11V15H3V1H3Z" fill="#784A2B"/>
-                        <path d="M4 2H11V14H4V2Z" fill="#A46438"/>
-                        <path d="M5 3H10V13H5V3Z" fill="#D1A888"/>
-                        <path d="M6 4H9V12H6V4Z" fill="#EADBC6"/>
-                        <path d="M2 3H3V13H2V3Z" fill="#5E3820"/>
-                    </svg>
-                ),
+                id: 'bookworm-yearly', name: 'Bookworm', description: 'Read 10 books in a year.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H11V2H12V3H13V13H12V14H11V15H3V1H3Z" fill="#784A2B"/> <path d="M4 2H11V14H4V2Z" fill="#A46438"/> <path d="M5 3H10V13H5V3Z" fill="#D1A888"/> <path d="M6 4H9V12H6V4Z" fill="#EADBC6"/> <path d="M2 3H3V13H2V3Z" fill="#5E3820"/> </svg> ),
                 condition: (books) => books.length >= 10,
             },
             {
-                id: 'world-traveler-yearly',
-                name: 'World Traveler',
-                description: 'Read books from 5 different countries in a year.',
-                type: 'yearly',
-                badge: (
-                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#60A5FA"/>
-                        <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#3B82F6"/>
-                        <path d="M7 4H6V5H5V6H6V7H5V8H4V9H5V10H7V11H8V12H10V11H11V9H10V8H11V7H12V6H11V5H9V4H7Z" fill="#4ADE80"/>
-                    </svg>
-                ),
+                id: 'world-traveler-yearly', name: 'World Traveler', description: 'Read books from 5 different countries in a year.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#60A5FA"/> <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#3B82F6"/> <path d="M7 4H6V5H5V6H6V7H5V8H4V9H5V10H7V11H8V12H10V11H11V9H10V8H11V7H12V6H11V5H9V4H7Z" fill="#4ADE80"/> </svg> ),
                 condition: (books) => new Set(books.map(b => b.country).filter(Boolean)).size >= 5,
             },
             {
-                id: 'the-sprinter-yearly',
-                name: 'The Sprinter',
-                description: 'Read 5 books in a single month.',
-                type: 'yearly',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 5H4V4H5V3H11V4H12V5H13V11H12V12H11V13H5V12H4V11H3V5Z" fill="#FBBF24"/>
-                        <path d="M8 6V7H9V8H8V9H7V8H6V7H7V6H8Z" fill="white"/>
-                        <path d="M5 5H4V6H5V5Z" fill="#F59E0B"/><path d="M11 5H12V6H11V5Z" fill="#F59E0B"/>
-                        <path d="M5 11H4V10H5V11Z" fill="#F59E0B"/><path d="M11 11H12V10H11V11Z" fill="#F59E0B"/>
-                    </svg>
-                ),
+                id: 'the-sprinter-yearly', name: 'The Sprinter', description: 'Read 5 books in a single month.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 5H4V4H5V3H11V4H12V5H13V11H12V12H11V13H5V12H4V11H3V5Z" fill="#FBBF24"/> <path d="M8 6V7H9V8H8V9H7V8H6V7H7V6H8Z" fill="white"/> <path d="M5 5H4V6H5V5Z" fill="#F59E0B"/><path d="M11 5H12V6H11V5Z" fill="#F59E0B"/> <path d="M5 11H4V10H5V11Z" fill="#F59E0B"/><path d="M11 11H12V10H11V11Z" fill="#F59E0B"/> </svg> ),
                 condition: (books) => {
-                    const monthCounts = books.reduce((acc, book) => {
-                        const month = new Date(book.readDate).getMonth();
-                        acc[month] = (acc[month] || 0) + 1;
-                        return acc;
-                    }, {});
+                    const monthCounts = books.reduce((acc, book) => { const month = new Date(book.readDate).getMonth(); acc[month] = (acc[month] || 0) + 1; return acc; }, {});
                     return Object.values(monthCounts).some(count => count >= 5);
                 }
             },
             {
-                id: 'consistent-reader-yearly',
-                name: 'Consistent Reader',
-                description: 'Read at least one book every month of the year.',
-                type: 'yearly',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 2H14V14H2V2Z" fill="#4B5563"/><path d="M3 3H13V13H3V3Z" fill="#6B7280"/>
-                        <path d="M4 1H5V3H4V1Z" fill="#4B5563"/><path d="M11 1H12V3H11V1Z" fill="#4B5563"/>
-                        <path d="M4 4H12V12H4V4Z" fill="#F9FAFB"/><path d="M4 4H12V5H4V4Z" fill="#EF4444"/>
-                    </svg>
-                ),
+                id: 'consistent-reader-yearly', name: 'Consistent Reader', description: 'Read at least one book every month of the year.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M2 2H14V14H2V2Z" fill="#4B5563"/><path d="M3 3H13V13H3V3Z" fill="#6B7280"/> <path d="M4 1H5V3H4V1Z" fill="#4B5563"/><path d="M11 1H12V3H11V1Z" fill="#4B5563"/> <path d="M4 4H12V12H4V4Z" fill="#F9FAFB"/><path d="M4 4H12V5H4V4Z" fill="#EF4444"/> </svg> ),
                 condition: (books) => new Set(books.map(b => new Date(b.readDate).getMonth())).size === 12,
             },
             {
-                id: 'goal-smasher-yearly',
-                name: 'Goal-Smasher',
-                description: 'Exceed your yearly reading goal by 10 books.',
-                type: 'yearly',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M8 1L10 5L14 6L11 9L12 13L8 11L4 13L5 9L2 6L6 5L8 1Z" fill="#F59E0B"/>
-                        <path d="M8 2L9.5 5.5L13 6.5L10.5 9L11 12.5L8 11L5 12.5L5.5 9L3 6.5L6.5 5.5L8 2Z" fill="#FBBF24"/>
-                    </svg>
-                ),
+                id: 'goal-smasher-yearly', name: 'Goal-Smasher', description: 'Exceed your yearly reading goal by 10 books.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M8 1L10 5L14 6L11 9L12 13L8 11L4 13L5 9L2 6L6 5L8 1Z" fill="#F59E0B"/> <path d="M8 2L9.5 5.5L13 6.5L10.5 9L11 12.5L8 11L5 12.5L5.5 9L3 6.5L6.5 5.5L8 2Z" fill="#FBBF24"/> </svg> ),
                 condition: (books) => books.length >= YEARLY_GOAL + 10,
             },
             {
-                id: 'summer-reading-yearly',
-                name: 'Summer Reading',
-                description: 'Read 10 books during June, July, and August.',
-                type: 'yearly',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M8 4C9.1 4 10 4.9 10 6C10 7.1 9.1 8 8 8C6.9 8 6 7.1 6 6C6 4.9 6.9 4 8 4Z" fill="#FBBF24"/>
-                        <path d="M8 2V3H9V4H10V5H11V6H12V8H11V9H10V10H9V11H8V12H7V11H6V10H5V9H4V8H5V6H6V5H7V4H8V2Z" fill="#FDE047"/>
-                    </svg>
-                ),
+                id: 'summer-reading-yearly', name: 'Summer Reading', description: 'Read 10 books during June, July, and August.', type: 'yearly',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M8 4C9.1 4 10 4.9 10 6C10 7.1 9.1 8 8 8C6.9 8 6 7.1 6 6C6 4.9 6.9 4 8 4Z" fill="#FBBF24"/> <path d="M8 2V3H9V4H10V5H11V6H12V8H11V9H10V10H9V11H8V12H7V11H6V10H5V9H4V8H5V6H6V5H7V4H8V2Z" fill="#FDE047"/> </svg> ),
                 condition: (books) => books.filter(b => [5, 6, 7].includes(new Date(b.readDate).getMonth())).length >= 10,
             },
             // Lifetime
             {
-                id: 'the-epic-lifetime',
-                name: 'The Epic',
-                description: 'Finish a book over 750 pages long.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 1H12V2H13V3H14V13H13V14H12V15H3V1Z" fill="#4A3A2B"/>
-                        <path d="M4 2H12V14H4V2Z" fill="#785A38"/>
-                        <path d="M5 3H11V13H5V3Z" fill="#A48868"/>
-                        <path d="M6 4H10V12H6V4Z" fill="#D1B898"/>
-                        <path d="M2 3H3V13H2V3Z" fill="#3E3020"/>
-                        <path d="M10 1H11V4H10V1Z" fill="#DC2626"/>
-                    </svg>
-                ),
+                id: 'the-epic-lifetime', name: 'The Epic', description: 'Finish a book over 750 pages long.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H12V2H13V3H14V13H13V14H12V15H3V1Z" fill="#4A3A2B"/> <path d="M4 2H12V14H4V2Z" fill="#785A38"/> <path d="M5 3H11V13H5V3Z" fill="#A48868"/> <path d="M6 4H10V12H6V4Z" fill="#D1B898"/> <path d="M2 3H3V13H2V3Z" fill="#3E3020"/> <path d="M10 1H11V4H10V1Z" fill="#DC2626"/> </svg> ),
                 condition: (books) => books.some(b => b.pageCount >= 750),
             },
             {
-                id: 'librarian-lifetime',
-                name: 'Librarian',
-                description: 'Log 250 books in total.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 2H14V14H2V2Z" fill="#A3A3A3"/>
-                        <path d="M3 3H13V13H3V3Z" fill="#D4D4D4"/>
-                        <path d="M4 4H12V12H4V4Z" fill="#F5F5F5"/>
-                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
-                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
-                    </svg>
-                ),
+                id: 'librarian-lifetime', name: 'Librarian', description: 'Log 250 books in total.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M2 2H14V14H2V2Z" fill="#A3A3A3"/> <path d="M3 3H13V13H3V3Z" fill="#D4D4D4"/> <path d="M4 4H12V12H4V4Z" fill="#F5F5F5"/> <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/> <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/> </svg> ),
                 condition: (books) => books.length >= 250,
             },
             {
-                id: 'archivist-lifetime',
-                name: 'Archivist',
-                description: 'Log 500 books in total.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 2H14V14H2V2Z" fill="#FCD34D"/><path d="M3 3H13V13H3V3Z" fill="#FBBF24"/>
-                        <path d="M4 4H12V12H4V4Z" fill="#F59E0B"/>
-                        <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/>
-                        <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/>
-                    </svg>
-                ),
+                id: 'archivist-lifetime', name: 'Archivist', description: 'Log 500 books in total.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M2 2H14V14H2V2Z" fill="#FCD34D"/><path d="M3 3H13V13H3V3Z" fill="#FBBF24"/> <path d="M4 4H12V12H4V4Z" fill="#F59E0B"/> <path d="M5 5H7V7H5V5Z" fill="#784A2B"/><path d="M9 5H11V7H9V5Z" fill="#784A2B"/> <path d="M5 9H7V11H5V9Z" fill="#784A2B"/><path d="M9 9H11V11H9V9Z" fill="#784A2B"/> </svg> ),
                 condition: (books) => books.length >= 500,
             },
-                 {
-                id: 'loyallist-lifetime',
-                name: 'Loyalist',
-                description: 'Read 10 books by the same author.',
-                type: 'lifetime',
-                badge: (
-                     <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#FBBF24"/>
-                        <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#F59E0B"/>
-                        <path d="M11 5L10 6L8 4L6 6L5 5L8 2L11 5Z" fill="#FFFFFF"/>
-                        <path d="M8 6L5 9H7V13H9V9H11L8 6Z" fill="#FFFFFF"/>
-                    </svg>
-                ),
+            {
+                id: 'loyallist-lifetime', name: 'Loyalist', description: 'Read 10 books by the same author.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M8 1C4.13 1 1 4.13 1 8C1 11.87 4.13 15 8 15C11.87 15 15 11.87 15 8C15 4.13 11.87 1 8 1Z" fill="#FBBF24"/> <path d="M8 2C4.69 2 2 4.69 2 8C2 11.31 4.69 14 8 14C11.31 14 14 11.31 14 8C14 4.69 11.31 2 8 2Z" fill="#F59E0B"/> <path d="M11 5L10 6L8 4L6 6L5 5L8 2L11 5Z" fill="#FFFFFF"/> <path d="M8 6L5 9H7V13H9V9H11L8 6Z" fill="#FFFFFF"/> </svg> ),
                 condition: (books) => {
-                    const authorCounts = books.reduce((acc, book) => {
-                        acc[book.author] = (acc[book.author] || 0) + 1;
-                        return acc;
-                    }, {});
+                    const authorCounts = books.reduce((acc, book) => { acc[book.author] = (acc[book.author] || 0) + 1; return acc; }, {});
                     return Object.values(authorCounts).some(count => count >= 10);
                 }
             },
             {
-                id: 'page-millionaire-lifetime',
-                name: 'Page Millionaire',
-                description: 'Read over 1,000,000 pages.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 3H13V13H3V3Z" fill="#10B981"/><path d="M4 4H12V12H4V4Z" fill="#34D399"/>
-                        <path d="M6 6H7V10H6V6Z" fill="white"/><path d="M8 6H9V7H8V6Z" fill="white"/>
-                        <path d="M8 8H9V10H8V8Z" fill="white"/>
-                    </svg>
-                ),
+                id: 'page-millionaire-lifetime', name: 'Page Millionaire', description: 'Read over 1,000,000 pages.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 3H13V13H3V3Z" fill="#10B981"/><path d="M4 4H12V12H4V4Z" fill="#34D399"/> <path d="M6 6H7V10H6V6Z" fill="white"/><path d="M8 6H9V7H8V6Z" fill="white"/> <path d="M8 8H9V10H8V8Z" fill="white"/> </svg> ),
                 condition: (books) => books.reduce((acc, book) => acc + (book.pageCount || 0), 0) >= 1000000,
             },
             {
-                id: 'decade-dabbler-lifetime',
-                name: 'Decade Dabbler',
-                description: 'Read books published in 5 different decades.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M2 4H14V6H2V4Z" fill="#9CA3AF"/><path d="M2 7H14V9H2V7Z" fill="#6B7280"/>
-                        <path d="M2 10H14V12H2V10Z" fill="#4B5563"/>
-                    </svg>
-                ),
+                id: 'decade-dabbler-lifetime', name: 'Decade Dabbler', description: 'Read books published in 5 different decades.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M2 4H14V6H2V4Z" fill="#9CA3AF"/><path d="M2 7H14V9H2V7Z" fill="#6B7280"/> <path d="M2 10H14V12H2V10Z" fill="#4B5563"/> </svg> ),
                 condition: (books) => {
                     const decades = new Set(books.map(b => Math.floor(b.publicationYear / 10) * 10));
                     return decades.size >= 5;
                 }
             },
             {
-                id: 'fiction-connoisseur-lifetime',
-                name: 'Fiction Connoisseur',
-                description: 'Read books from 10 different fiction genres.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 1H11V15H3V1Z" fill="#6366F1"/><path d="M4 2H10V14H4V2Z" fill="#818CF8"/>
-                        <path d="M5 3H9V13H5V3Z" fill="#A5B4FC"/>
-                    </svg>
-                ),
+                id: 'fiction-connoisseur-lifetime', name: 'Fiction Connoisseur', description: 'Read books from 10 different fiction genres.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H11V15H3V1Z" fill="#6366F1"/><path d="M4 2H10V14H4V2Z" fill="#818CF8"/> <path d="M5 3H9V13H5V3Z" fill="#A5B4FC"/> </svg> ),
                 condition: (books) => new Set(books.filter(b => b.isFiction).map(b => b.genre)).size >= 10,
             },
             {
-                id: 'non-fiction-scholar-lifetime',
-                name: 'Non-Fiction Scholar',
-                description: 'Read books from 10 different non-fiction genres.',
-                type: 'lifetime',
-                badge: (
-                    <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}>
-                        <path d="M3 1H11V15H3V1Z" fill="#EC4899"/><path d="M4 2H10V14H4V2Z" fill="#F472B6"/>
-                        <path d="M5 3H9V13H5V3Z" fill="#F9A8D4"/>
-                    </svg>
-                ),
+                id: 'non-fiction-scholar-lifetime', name: 'Non-Fiction Scholar', description: 'Read books from 10 different non-fiction genres.', type: 'lifetime',
+                badge: ( <svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style={{ imageRendering: 'pixelated' }}> <path d="M3 1H11V15H3V1Z" fill="#EC4899"/><path d="M4 2H10V14H4V2Z" fill="#F472B6"/> <path d="M5 3H9V13H5V3Z" fill="#F9A8D4"/> </svg> ),
                 condition: (books) => new Set(books.filter(b => !b.isFiction).map(b => b.genre)).size >= 10,
             },
         ];
@@ -2373,7 +2333,6 @@
                 </div>
             );
         }
-
 
         // Render the app
         const container = document.getElementById('root');
