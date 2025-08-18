@@ -394,7 +394,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.76</span>
+                            <span className="font-mono text-xs text-gray-500">v0.77</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -450,8 +450,14 @@
                 const html5QrCode = new Html5Qrcode("reader");
 
                 const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-                    onScanSuccess(decodedText);
-                    html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+                    html5QrCode.stop()
+                        .then(() => {
+                            onScanSuccess(decodedText);
+                        })
+                        .catch(err => {
+                            console.error("Failed to stop scanner, but proceeding anyway.", err);
+                            onScanSuccess(decodedText);
+                        });
                 };
 
                 const config = { fps: 10, qrbox: { width: 250, height: 150 } };
@@ -483,7 +489,7 @@
             );
         }
 
-    // --- Add Single Book Component (CORRECTED) ---
+    // --- Add Single Book Component (FIXED) ---
         function AddBook({ books, onBookAdded, onTbrAdded, onCancel }) {
             const [isbn, setIsbn] = useState('');
             const [bookData, setBookData] = useState(null);
@@ -508,8 +514,7 @@
             const fictionGenres = useMemo(() => [...new Set(books.filter(b => b.isFiction).map(b => b.genre))], [books]);
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
 
-            // CORRECTED: Removed the useCallback wrapper from this function
-            const handleIsbnSearch = async (searchIsbn) => {
+            const handleIsbnSearch = useCallback(async (searchIsbn) => {
                 setLoading(true);
                 setError('');
                 setBookData(null);
@@ -538,13 +543,13 @@
                     setError('Failed to fetch book data. Please check the ISBN and your connection.');
                 }
                 setLoading(false);
-            };
+            }, []);
 
-            const handleScanSuccess = (decodedIsbn) => {
+            const handleScanSuccess = useCallback((decodedIsbn) => {
                 setIsScanning(false);
                 setIsbn(decodedIsbn);
                 handleIsbnSearch(decodedIsbn);
-            };
+            }, [handleIsbnSearch]);
 
             const handleIsbnFormSubmit = (e) => {
                 e.preventDefault();
@@ -797,7 +802,7 @@
                                          <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
                                      </div>
                                      <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
-                                  </form>
+                                 </form>
                             )}
 
                             {bookData && !isManualAdd && (
@@ -1054,17 +1059,17 @@
                                                     </div>
                                                 )}
                                                 <div className="grid grid-cols-2 gap-2">
-                                                      <div>
+                                                     <div>
                                                         <label className="block text-xs font-medium text-gray-400">Type</label>
                                                         <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
                                                             <option value="true">Fiction</option>
                                                             <option value="false">Non-Fiction</option>
                                                         </select>
-                                                      </div>
-                                                     <div>
+                                                    </div>
+                                                   <div>
                                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
                                                         <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                      </div>
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
@@ -1082,7 +1087,7 @@
                                     )}
                                 </div>
                             ))}
-                                  <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All Books</button>
+                                 <button onClick={handleAddAllBooks} className="mt-4 w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add All Books</button>
                         </div>
                     )}
                 </div>
@@ -1506,203 +1511,203 @@
                 }
             }, [books, selectedPeriod, isBulkEditing]);
             
-              const handlePeriodSelect = (period) => {
-                  setSelectedPeriod(period);
-              };
-              
-              const handleDeleteRequest = (bookId) => {
-                  setConfirmDelete({ isOpen: true, bookId: bookId });
-              };
+             const handlePeriodSelect = (period) => {
+                 setSelectedPeriod(period);
+             };
+             
+             const handleDeleteRequest = (bookId) => {
+                 setConfirmDelete({ isOpen: true, bookId: bookId });
+             };
 
-              const confirmDeletion = async () => {
-                  if (confirmDelete.bookId) {
-                      await deleteDoc(doc(db, "readings", confirmDelete.bookId));
-                      onBookUpdated();
-                  }
-                  setConfirmDelete({ isOpen: false, bookId: null });
-              };
+             const confirmDeletion = async () => {
+                 if (confirmDelete.bookId) {
+                     await deleteDoc(doc(db, "readings", confirmDelete.bookId));
+                     onBookUpdated();
+                 }
+                 setConfirmDelete({ isOpen: false, bookId: null });
+             };
 
-              const cancelDeletion = () => {
-                  setConfirmDelete({ isOpen: false, bookId: null });
-              };
-              
-              const handleDragStart = (e, index) => {
-                  draggedItem.current = displayedBooks[index];
-                  e.dataTransfer.effectAllowed = 'move';
-              };
+             const cancelDeletion = () => {
+                 setConfirmDelete({ isOpen: false, bookId: null });
+             };
+             
+             const handleDragStart = (e, index) => {
+                 draggedItem.current = displayedBooks[index];
+                 e.dataTransfer.effectAllowed = 'move';
+             };
 
-              const handleDragOver = (e, index) => {
-                  e.preventDefault();
-                  const draggedOverItem = displayedBooks[index];
-                  if (draggedItem.current === draggedOverItem) {
-                      return;
-                  }
-                  let items = displayedBooks.filter(item => item.id !== draggedItem.current.id);
-                  items.splice(index, 0, draggedItem.current);
-                  setDisplayedBooks(items);
-              };
-              
-              const handleDrop = async () => {
-                  const batch = writeBatch(db);
-                  displayedBooks.forEach((book, index) => {
-                      const bookRef = doc(db, "readings", book.id);
-                      batch.update(bookRef, { orderIndex: index });
-                  });
-                  await batch.commit();
-                  draggedItem.current = null;
-                  onBookUpdated();
-              };
+             const handleDragOver = (e, index) => {
+                 e.preventDefault();
+                 const draggedOverItem = displayedBooks[index];
+                 if (draggedItem.current === draggedOverItem) {
+                     return;
+                 }
+                 let items = displayedBooks.filter(item => item.id !== draggedItem.current.id);
+                 items.splice(index, 0, draggedItem.current);
+                 setDisplayedBooks(items);
+             };
+             
+             const handleDrop = async () => {
+                 const batch = writeBatch(db);
+                 displayedBooks.forEach((book, index) => {
+                     const bookRef = doc(db, "readings", book.id);
+                     batch.update(bookRef, { orderIndex: index });
+                 });
+                 await batch.commit();
+                 draggedItem.current = null;
+                 onBookUpdated();
+             };
 
-              const handleEditClick = (book) => {
-                  setEditingBookId(book.id);
-                  const date = new Date(book.readDate);
-                  setEditFormData({
-                      title: book.title,
-                      author: book.author,
-                      coverUrl: book.coverUrl,
-                      readMonth: date.getMonth(),
-                      readYear: date.getFullYear(),
-                      pageCount: book.pageCount || 0,
-                      genre: book.genre,
-                      country: book.country || '',
-                      isFiction: book.isFiction,
-                  });
-              };
+             const handleEditClick = (book) => {
+                 setEditingBookId(book.id);
+                 const date = new Date(book.readDate);
+                 setEditFormData({
+                     title: book.title,
+                     author: book.author,
+                     coverUrl: book.coverUrl,
+                     readMonth: date.getMonth(),
+                     readYear: date.getFullYear(),
+                     pageCount: book.pageCount || 0,
+                     genre: book.genre,
+                     country: book.country || '',
+                     isFiction: book.isFiction,
+                 });
+             };
 
-              const handleCancelEdit = () => {
-                  setEditingBookId(null);
-                  setIsEditingNewGenre(false);
-              };
+             const handleCancelEdit = () => {
+                 setEditingBookId(null);
+                 setIsEditingNewGenre(false);
+             };
 
-              const handleSaveEdit = async (bookId) => {
-                  const { readMonth, readYear, pageCount, genre, title, coverUrl, country, author, isFiction } = editFormData;
-                  const newReadDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
-                  const updatedData = {
-                      readDate: newReadDate,
-                      pageCount: Number(pageCount),
-                      genre,
-                      title,
-                      author,
-                      isFiction,
-                      coverUrl,
-                      country,
-                      readYear: Number(readYear),
-                  };
-                  const bookRef = doc(db, "readings", bookId);
-                  await updateDoc(bookRef, updatedData);
-                  setEditingBookId(null);
-                  setIsEditingNewGenre(false);
-                  onBookUpdated();
-              };
+             const handleSaveEdit = async (bookId) => {
+                 const { readMonth, readYear, pageCount, genre, title, coverUrl, country, author, isFiction } = editFormData;
+                 const newReadDate = new Date(readYear, readMonth, 15).toISOString().split('T')[0];
+                 const updatedData = {
+                     readDate: newReadDate,
+                     pageCount: Number(pageCount),
+                     genre,
+                     title,
+                     author,
+                     isFiction,
+                     coverUrl,
+                     country,
+                     readYear: Number(readYear),
+                 };
+                 const bookRef = doc(db, "readings", bookId);
+                 await updateDoc(bookRef, updatedData);
+                 setEditingBookId(null);
+                 setIsEditingNewGenre(false);
+                 onBookUpdated();
+             };
 
-              const handleEditFormChange = (e) => {
-                  const { name, value } = e.target;
-                  if (name === 'genreSelect') {
-                      if (value === 'add-new') {
-                          setIsEditingNewGenre(true);
-                          setEditFormData(prev => ({ ...prev, genre: '' }));
-                      } else {
-                          setIsEditingNewGenre(false);
-                          setEditFormData(prev => ({ ...prev, genre: value }));
-                      }
-                  } else if (name === 'isFiction') {
-                      const isFictionValue = value === 'true';
-                      setEditFormData(prev => {
-                          const newFormData = { ...prev, isFiction: isFictionValue };
-                          const newGenreList = isFictionValue ? fictionGenres : nonFictionGenres;
-                          if (!newGenreList.includes(newFormData.genre)) {
-                              newFormData.genre = '';
-                          }
-                          return newFormData;
-                      });
-                  } else {
-                      setEditFormData(prev => ({ ...prev, [name]: value }));
-                  }
-              };
+             const handleEditFormChange = (e) => {
+                 const { name, value } = e.target;
+                 if (name === 'genreSelect') {
+                     if (value === 'add-new') {
+                         setIsEditingNewGenre(true);
+                         setEditFormData(prev => ({ ...prev, genre: '' }));
+                     } else {
+                         setIsEditingNewGenre(false);
+                         setEditFormData(prev => ({ ...prev, genre: value }));
+                     }
+                 } else if (name === 'isFiction') {
+                     const isFictionValue = value === 'true';
+                     setEditFormData(prev => {
+                         const newFormData = { ...prev, isFiction: isFictionValue };
+                         const newGenreList = isFictionValue ? fictionGenres : nonFictionGenres;
+                         if (!newGenreList.includes(newFormData.genre)) {
+                             newFormData.genre = '';
+                         }
+                         return newFormData;
+                     });
+                 } else {
+                     setEditFormData(prev => ({ ...prev, [name]: value }));
+                 }
+             };
 
-              const toggleBulkEdit = () => {
-                  if (!isBulkEditing) {
-                      const dataForEditing = displayedBooks.map(book => {
-                          const date = new Date(book.readDate);
-                          return {
-                              ...book,
-                              readMonth: date.getMonth(),
-                              readYear: date.getFullYear(),
-                              isAddingNewGenre: false,
-                              isAddingNewCountry: false,
-                          };
-                      });
-                      setBulkEditData(dataForEditing);
-                  }
-                  setIsBulkEditing(!isBulkEditing);
-              };
+             const toggleBulkEdit = () => {
+                 if (!isBulkEditing) {
+                     const dataForEditing = displayedBooks.map(book => {
+                         const date = new Date(book.readDate);
+                         return {
+                             ...book,
+                             readMonth: date.getMonth(),
+                             readYear: date.getFullYear(),
+                             isAddingNewGenre: false,
+                             isAddingNewCountry: false,
+                         };
+                     });
+                     setBulkEditData(dataForEditing);
+                 }
+                 setIsBulkEditing(!isBulkEditing);
+             };
 
-              const handleBulkEditChange = (index, field, value) => {
-                  const updatedData = [...bulkEditData];
-                  
-                  if (field === 'genreSelect') {
-                      if (value === 'add-new') {
-                          updatedData[index].isAddingNewGenre = true;
-                          updatedData[index].genre = '';
-                      } else {
-                          updatedData[index].isAddingNewGenre = false;
-                          updatedData[index].genre = value;
-                      }
-                  } else if (field === 'countrySelect') {
-                      if (value === 'add-new') {
-                          updatedData[index].isAddingNewCountry = true;
-                          updatedData[index].country = '';
-                      } else {
-                          updatedData[index].isAddingNewCountry = false;
-                          updatedData[index].country = value;
-                      }
-                  } else if (field === 'isFiction') {
-                      const isFiction = value === 'true';
-                      updatedData[index].isFiction = isFiction;
-                      const newGenreList = isFiction ? fictionGenres : nonFictionGenres;
-                      if (!newGenreList.includes(updatedData[index].genre)) {
-                          updatedData[index].genre = ''; 
-                      }
-                  }
-                  else {
-                      updatedData[index][field] = value;
-                  }
-                  
-                  setBulkEditData(updatedData);
-              };
-              
-              const handleSaveBulkEdit = async () => {
-                  try {
-                      const batch = writeBatch(db);
-                      bulkEditData.forEach(book => {
-                          const year = Number(book.readYear);
-                          const month = Number(book.readMonth);
+             const handleBulkEditChange = (index, field, value) => {
+                 const updatedData = [...bulkEditData];
+                 
+                 if (field === 'genreSelect') {
+                     if (value === 'add-new') {
+                         updatedData[index].isAddingNewGenre = true;
+                         updatedData[index].genre = '';
+                     } else {
+                         updatedData[index].isAddingNewGenre = false;
+                         updatedData[index].genre = value;
+                     }
+                 } else if (field === 'countrySelect') {
+                     if (value === 'add-new') {
+                         updatedData[index].isAddingNewCountry = true;
+                         updatedData[index].country = '';
+                     } else {
+                         updatedData[index].isAddingNewCountry = false;
+                         updatedData[index].country = value;
+                     }
+                 } else if (field === 'isFiction') {
+                     const isFiction = value === 'true';
+                     updatedData[index].isFiction = isFiction;
+                     const newGenreList = isFiction ? fictionGenres : nonFictionGenres;
+                     if (!newGenreList.includes(updatedData[index].genre)) {
+                         updatedData[index].genre = ''; 
+                     }
+                 }
+                 else {
+                     updatedData[index][field] = value;
+                 }
+                 
+                 setBulkEditData(updatedData);
+             };
+             
+             const handleSaveBulkEdit = async () => {
+                 try {
+                     const batch = writeBatch(db);
+                     bulkEditData.forEach(book => {
+                         const year = Number(book.readYear);
+                         const month = Number(book.readMonth);
 
-                          if (isNaN(year) || isNaN(month)) {
-                              console.warn(`Skipping book "${book.title}" due to invalid date.`);
-                              return;
-                          }
+                         if (isNaN(year) || isNaN(month)) {
+                             console.warn(`Skipping book "${book.title}" due to invalid date.`);
+                             return;
+                         }
 
-                          const bookRef = doc(db, "readings", book.id);
-                          const newReadDate = new Date(year, month, 15).toISOString().split('T')[0];
-                          const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
-                          
-                          const updatedData = {
-                              ...dataToSave,
-                              pageCount: Number(book.pageCount) || 0,
-                              readDate: newReadDate,
-                              readYear: year,
-                          };
-                          batch.update(bookRef, updatedData);
-                      });
-                      await batch.commit();
-                      setIsBulkEditing(false);
-                      onBookUpdated();
-                  } catch (error) {
-                      console.error("Failed to save bulk changes:", error);
-                      alert("Error: Could not save changes. Please ensure all fields like Year have valid numbers.");
-                  }
-              };
+                         const bookRef = doc(db, "readings", book.id);
+                         const newReadDate = new Date(year, month, 15).toISOString().split('T')[0];
+                         const { id, readMonth, isAddingNewGenre, isAddingNewCountry, ...dataToSave } = book;
+                         
+                         const updatedData = {
+                             ...dataToSave,
+                             pageCount: Number(book.pageCount) || 0,
+                             readDate: newReadDate,
+                             readYear: year,
+                         };
+                         batch.update(bookRef, updatedData);
+                     });
+                     await batch.commit();
+                     setIsBulkEditing(false);
+                     onBookUpdated();
+                 } catch (error) {
+                     console.error("Failed to save bulk changes:", error);
+                     alert("Error: Could not save changes. Please ensure all fields like Year have valid numbers.");
+                 }
+             };
 
 
             if (loading) return <p>Loading books...</p>;
@@ -1730,18 +1735,18 @@
                     <ConfirmationModal isOpen={confirmDelete.isOpen} message="Are you sure you want to delete this book?" onConfirm={confirmDeletion} onCancel={cancelDeletion} />
                     
                      <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
-                        <div className="flex items-center gap-2">
-                            <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
-                            </div>
-                            {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
-                                <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
-                            )}
-                        </div>
-                    </div>
-                    
+                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
+                         <div className="flex items-center gap-2">
+                             <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                 <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                             </div>
+                             {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
+                                 <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                             )}
+                         </div>
+                     </div>
+                     
                     {isBulkEditing && (
                         <div className="flex justify-end gap-2 mb-4">
                             <button onClick={handleSaveBulkEdit} className="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-md">Save All Changes</button>
