@@ -328,7 +328,6 @@
                         {view === 'add-multiple' && <AddMultipleBooks books={books} onBooksAdded={handleBooksChanged} onCancel={() => setView('gallery')} />}
                         {view === 'stats' && <Stats books={books} loading={loadingBooks} />}
                         {view === 'gallery' && <BooksDisplay books={books} loading={loadingBooks} onBookUpdated={fetchBooks} setView={setView} />}
-                        {view === 'search' && <Search books={books} onCancel={() => setView('gallery')} />}
                     </main>
                 </div>
             );
@@ -354,7 +353,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.86</span>
+                            <span className="font-mono text-xs text-gray-500">v0.87</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -370,7 +369,6 @@
                         <nav className="hidden md:flex items-center space-x-2 bg-gray-800 p-2 rounded-lg">
                             <NavLink view="gallery">Books</NavLink>
                             <NavLink view="stats">Stats</NavLink>
-                            <NavLink view="search">Search</NavLink>
                             <NavLink view="add-single">+ Add Book</NavLink>
                             <NavLink view="add-multiple">+ Add Multiple</NavLink>
                         </nav>
@@ -386,7 +384,6 @@
                             <nav className="flex flex-col space-y-2">
                                 <NavLink view="gallery">Books</NavLink>
                                 <NavLink view="stats">Stats</NavLink>
-                                <NavLink view="search">Search</NavLink>
                                 <NavLink view="add-single">+ Add Book</NavLink>
                                 <NavLink view="add-multiple">+ Add Multiple</NavLink>
                             </nav>
@@ -640,6 +637,7 @@
                                             onChange={(e) => setIsbn(e.target.value)}
                                             placeholder="Enter 10 or 13-digit ISBN"
                                             className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            required
                                         />
                                         <button type="submit" disabled={loading} className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-500">
                                             {loading ? 'Searching...' : 'Find Book'}
@@ -666,60 +664,60 @@
                             )}
 
                             {isManualAdd && (
-                                 <form onSubmit={handleSaveManualBook} className="space-y-4">
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Title*</label>
-                                             <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                         </div>
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Author*</label>
-                                             <input type="text" name="author" value={manualFormData.author} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
-                                         </div>
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Cover Image URL</label>
-                                         <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Date Read</label>
-                                         <div className="flex gap-2 mt-1">
-                                             <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
-                                                 {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
-                                             </select>
-                                             <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
-                                         </div>
-                                     </div>
-                                     <div className="grid grid-cols-2 gap-4">
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Type</label>
-                                             <select name="isFiction" value={manualFormData.isFiction} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                                 <option value="true">Fiction</option>
-                                                 <option value="false">Non-Fiction</option>
-                                             </select>
-                                         </div>
-                                         <div>
-                                             <label className="block text-sm font-medium text-gray-400">Pages</label>
-                                             <input type="number" name="pageCount" value={manualFormData.pageCount} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                         </div>
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Genre</label>
-                                         <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
-                                             <option value="" disabled>Select a genre</option>
-                                             {(manualFormData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
-                                             <option value="add-new">--- Add New Genre ---</option>
-                                         </select>
-                                         {isAddingNewGenre && (
-                                             <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
-                                         )}
-                                     </div>
-                                     <div>
-                                         <label className="block text-sm font-medium text-gray-400">Author's Country</label>
-                                         <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
-                                     </div>
-                                     <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
-                                  </form>
+                                   <form onSubmit={handleSaveManualBook} className="space-y-4">
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                           <div>
+                                               <label className="block text-sm font-medium text-gray-400">Title*</label>
+                                               <input type="text" name="title" value={manualFormData.title} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                           </div>
+                                           <div>
+                                               <label className="block text-sm font-medium text-gray-400">Author*</label>
+                                               <input type="text" name="author" value={manualFormData.author} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white" required/>
+                                           </div>
+                                       </div>
+                                       <div>
+                                           <label className="block text-sm font-medium text-gray-400">Cover Image URL</label>
+                                           <input type="text" name="coverUrl" value={manualFormData.coverUrl} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                       </div>
+                                       <div>
+                                           <label className="block text-sm font-medium text-gray-400">Date Read</label>
+                                           <div className="flex gap-2 mt-1">
+                                               <select value={readMonth} onChange={e => setReadMonth(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white">
+                                                   {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                               </select>
+                                               <input type="number" value={readYear} onChange={e => setReadYear(parseInt(e.target.value))} className="w-full p-2 bg-gray-700 rounded-md text-white" />
+                                           </div>
+                                       </div>
+                                       <div className="grid grid-cols-2 gap-4">
+                                           <div>
+                                               <label className="block text-sm font-medium text-gray-400">Type</label>
+                                               <select name="isFiction" value={manualFormData.isFiction} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                                   <option value="true">Fiction</option>
+                                                   <option value="false">Non-Fiction</option>
+                                               </select>
+                                           </div>
+                                           <div>
+                                               <label className="block text-sm font-medium text-gray-400">Pages</label>
+                                               <input type="number" name="pageCount" value={manualFormData.pageCount} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                           </div>
+                                       </div>
+                                       <div>
+                                           <label className="block text-sm font-medium text-gray-400">Genre</label>
+                                           <select name="genreSelect" value={isAddingNewGenre ? 'add-new' : manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white">
+                                               <option value="" disabled>Select a genre</option>
+                                               {(manualFormData.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                               <option value="add-new">--- Add New Genre ---</option>
+                                           </select>
+                                           {isAddingNewGenre && (
+                                               <input type="text" name="genre" placeholder="New Genre" value={manualFormData.genre} onChange={handleManualFormChange} className="w-full p-2 mt-2 bg-gray-600 rounded-md text-white"/>
+                                           )}
+                                       </div>
+                                       <div>
+                                           <label className="block text-sm font-medium text-gray-400">Author's Country</label>
+                                           <input type="text" name="country" value={manualFormData.country} onChange={handleManualFormChange} className="w-full p-2 mt-1 bg-gray-700 rounded-md text-white"/>
+                                       </div>
+                                       <button type="submit" className="w-full py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">Add Book</button>
+                                    </form>
                             )}
 
                             {bookData && !isManualAdd && (
@@ -950,16 +948,16 @@
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2">
                                                      <div>
-                                                        <label className="block text-xs font-medium text-gray-400">Type</label>
-                                                        <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                            <option value="true">Fiction</option>
-                                                            <option value="false">Non-Fiction</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-400">Pages</label>
-                                                        <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                                    </div>
+                                                         <label className="block text-xs font-medium text-gray-400">Type</label>
+                                                         <select value={book.isFiction} onChange={e => handleBookDataChange(index, 'isFiction', e.target.value === 'true')} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white">
+                                                             <option value="true">Fiction</option>
+                                                             <option value="false">Non-Fiction</option>
+                                                         </select>
+                                                     </div>
+                                                     <div>
+                                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                                         <input type="number" value={book.pageCount} onChange={e => handleBookDataChange(index, 'pageCount', parseInt(e.target.value))} className="w-full p-2 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                                     </div>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-gray-400">Genre</label>
@@ -1396,6 +1394,8 @@
             const [bulkEditData, setBulkEditData] = useState([]);
             const [selectedPeriod, setSelectedPeriod] = useState(new Date().getFullYear());
             const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, bookId: null });
+            const [searchTerm, setSearchTerm] = useState('');
+            const [searchType, setSearchType] = useState('title');
             
             const draggedItem = useRef(null);
             
@@ -1434,6 +1434,20 @@
                     setIsBulkEditing(false);
                 }
             }, [books, selectedPeriod, isBulkEditing]);
+            
+            const filteredBooks = useMemo(() => {
+                if (!searchTerm) {
+                    return displayedBooks;
+                }
+                const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                return displayedBooks.filter(book => {
+                    if (searchType === 'title') {
+                        return book.title.toLowerCase().includes(lowerCaseSearchTerm);
+                    } else {
+                        return book.author.toLowerCase().includes(lowerCaseSearchTerm);
+                    }
+                });
+            }, [searchTerm, searchType, displayedBooks]);
             
              const handlePeriodSelect = (period) => {
                  setSelectedPeriod(period);
@@ -1652,30 +1666,48 @@
                     </button>
 
                     {selectedPeriod !== 'All Time' && (
-                        <GoalProgress count={displayedBooks.length} goal={YEARLY_GOAL} year={selectedPeriod} />
+                        <GoalProgress count={filteredBooks.length} goal={YEARLY_GOAL} year={selectedPeriod} />
                     )}
                     <Lightbox book={lightboxBook} onClose={() => setLightboxBook(null)} />
                     <ConfirmationModal isOpen={confirmDelete.isOpen} message="Are you sure you want to delete this book?" onConfirm={confirmDeletion} onCancel={cancelDeletion} />
                     
-                     <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-                         <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
-                         <div className="flex items-center gap-2">
-                             <div className="flex items-center bg-gray-800 p-1 rounded-lg">
-                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
-                                 <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
-                             </div>
-                             {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
-                                 <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
-                             )}
-                         </div>
-                     </div>
-                     
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold mb-2 md:mb-0">Your Library</h2>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center bg-gray-800 p-1 rounded-lg">
+                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'list' ? activeClass : inactiveClass}`}>List</button>
+                                <button onClick={() => setViewMode('gallery')} className={`px-3 py-1 rounded-md text-sm font-medium ${viewMode === 'gallery' ? activeClass : inactiveClass}`}>Gallery</button>
+                            </div>
+                            {viewMode === 'list' && !isBulkEditing && selectedPeriod !== 'All Time' && (
+                                <button onClick={toggleBulkEdit} className="px-3 py-1 rounded-md text-sm font-medium bg-yellow-600 text-white">Bulk Edit</button>
+                            )}
+                        </div>
+                    </div>
+                    
                     {isBulkEditing && (
                         <div className="flex justify-end gap-2 mb-4">
                             <button onClick={handleSaveBulkEdit} className="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-md">Save All Changes</button>
                             <button onClick={toggleBulkEdit} className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md">Cancel</button>
                         </div>
                     )}
+                    
+                    <div className="mb-6 flex flex-col sm:flex-row gap-2">
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder={`Search by ${searchType}...`}
+                            className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <select
+                            value={searchType}
+                            onChange={(e) => setSearchType(e.target.value)}
+                            className="p-2 bg-gray-700 rounded-md text-white"
+                        >
+                            <option value="title">Title</option>
+                            <option value="author">Author</option>
+                        </select>
+                    </div>
 
                     <div className="mb-6">
                         <div className="flex flex-wrap gap-2">
@@ -1691,11 +1723,11 @@
                         </div>
                     </div>
 
-                    {displayedBooks.length === 0 ? (
-                         <p className="text-gray-400">No books found for the selected period.</p>
+                    {filteredBooks.length === 0 ? (
+                            <p className="text-gray-400">No books found for the selected period or search term.</p>
                     ) : viewMode === 'gallery' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                            {displayedBooks.map(book => (
+                            {filteredBooks.map(book => (
                                 <button key={book.id} onClick={() => setLightboxBook(book)} className="focus:outline-none">
                                     <img 
                                         src={book.coverUrl} 
@@ -1706,96 +1738,96 @@
                             ))}
                         </div>
                     ) : isBulkEditing ? (
-                         <div className="space-y-3">
-                         {bulkEditData.map((book, index) => (
-                             <div key={book.id} className="p-3 bg-gray-700 rounded-lg space-y-3">
-                                 <div className="grid grid-cols-1 md:grid-cols-10 gap-x-4 gap-y-2 items-end">
-                                     <div className="md:col-span-2">
-                                         <label className="block text-xs font-medium text-gray-400">Title</label>
-                                         <input type="text" value={book.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                     </div>
-                                     <div className="md:col-span-2">
-                                         <label className="block text-xs font-medium text-gray-400">Author</label>
-                                         <input type="text" value={book.author || ''} onChange={(e) => handleBulkEditChange(index, 'author', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
-                                     </div>
-                                     <div>
-                                         <label className="block text-xs font-medium text-gray-400">Country</label>
-                                          <select
-                                             value={book.isAddingNewCountry ? 'add-new' : book.country}
-                                             onChange={(e) => handleBulkEditChange(index, 'countrySelect', e.target.value)}
-                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                         >
-                                             <option value={book.country} disabled>{book.country || 'Select Country'}</option>
-                                             {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
-                                             <option value="add-new">--- Add New ---</option>
-                                         </select>
-                                         {book.isAddingNewCountry && (
-                                             <input
-                                                 type="text"
-                                                 placeholder="New Country"
-                                                 value={book.country}
-                                                 onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)}
-                                                 className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
-                                             />
-                                         )}
-                                     </div>
-                                     <div>
-                                         <label className="block text-xs font-medium text-gray-400">Type</label>
-                                         <select
-                                             value={book.isFiction}
-                                             onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value)}
-                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                         >
-                                             <option value={true}>Fiction</option>
-                                             <option value={false}>Non-Fiction</option>
-                                         </select>
-                                     </div>
-                                     <div className="md:col-span-2">
-                                         <label className="block text-xs font-medium text-gray-400">Genre</label>
-                                          <select
-                                             value={book.isAddingNewGenre ? 'add-new' : book.genre}
-                                             onChange={(e) => handleBulkEditChange(index, 'genreSelect', e.target.value)}
-                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                         >
-                                             <option value={book.genre} disabled>{book.genre || 'Select Genre'}</option>
-                                             {(book.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
-                                             <option value="add-new">--- Add New ---</option>
-                                         </select>
-                                         {book.isAddingNewGenre && (
-                                             <input
-                                                 type="text"
-                                                 placeholder="New Genre"
-                                                 value={book.genre}
-                                                 onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)}
-                                                 className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
-                                             />
-                                         )}
-                                     </div>
-                                     <div className="flex gap-1">
+                             <div className="space-y-3">
+                             {bulkEditData.map((book, index) => (
+                                 <div key={book.id} className="p-3 bg-gray-700 rounded-lg space-y-3">
+                                     <div className="grid grid-cols-1 md:grid-cols-10 gap-x-4 gap-y-2 items-end">
+                                         <div className="md:col-span-2">
+                                             <label className="block text-xs font-medium text-gray-400">Title</label>
+                                             <input type="text" value={book.title || ''} onChange={(e) => handleBulkEditChange(index, 'title', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                         </div>
+                                         <div className="md:col-span-2">
+                                             <label className="block text-xs font-medium text-gray-400">Author</label>
+                                             <input type="text" value={book.author || ''} onChange={(e) => handleBulkEditChange(index, 'author', e.target.value)} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"/>
+                                         </div>
                                          <div>
-                                             <label className="block text-xs font-medium text-gray-400">Month</label>
+                                             <label className="block text-xs font-medium text-gray-400">Country</label>
+                                              <select
+                                                  value={book.isAddingNewCountry ? 'add-new' : book.country}
+                                                  onChange={(e) => handleBulkEditChange(index, 'countrySelect', e.target.value)}
+                                                  className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                              >
+                                                  <option value={book.country} disabled>{book.country || 'Select Country'}</option>
+                                                  {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                                                  <option value="add-new">--- Add New ---</option>
+                                              </select>
+                                              {book.isAddingNewCountry && (
+                                                   <input
+                                                       type="text"
+                                                       placeholder="New Country"
+                                                       value={book.country}
+                                                       onChange={(e) => handleBulkEditChange(index, 'country', e.target.value)}
+                                                       className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                                   />
+                                              )}
+                                         </div>
+                                         <div>
+                                             <label className="block text-xs font-medium text-gray-400">Type</label>
                                              <select
-                                                 value={book.readMonth ?? 0}
-                                                 onChange={(e) => handleBulkEditChange(index, 'readMonth', parseInt(e.target.value))}
+                                                 value={book.isFiction}
+                                                 onChange={(e) => handleBulkEditChange(index, 'isFiction', e.target.value)}
                                                  className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
                                              >
-                                                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                 <option value={true}>Fiction</option>
+                                                 <option value={false}>Non-Fiction</option>
                                              </select>
                                          </div>
-                                     </div>
-                                     <div>
-                                         <label className="block text-xs font-medium text-gray-400">Pages</label>
-                                         <input
-                                             type="number"
-                                             value={book.pageCount || 0}
-                                             onChange={(e) => handleBulkEditChange(index, 'pageCount', parseInt(e.target.value) || 0)}
-                                             className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
-                                         />
+                                         <div className="md:col-span-2">
+                                             <label className="block text-xs font-medium text-gray-400">Genre</label>
+                                              <select
+                                                  value={book.isAddingNewGenre ? 'add-new' : book.genre}
+                                                  onChange={(e) => handleBulkEditChange(index, 'genreSelect', e.target.value)}
+                                                  className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                              >
+                                                  <option value={book.genre} disabled>{book.genre || 'Select Genre'}</option>
+                                                  {(book.isFiction ? fictionGenres : nonFictionGenres).map(g => <option key={g} value={g}>{g}</option>)}
+                                                  <option value="add-new">--- Add New ---</option>
+                                              </select>
+                                              {book.isAddingNewGenre && (
+                                                   <input
+                                                       type="text"
+                                                       placeholder="New Genre"
+                                                       value={book.genre}
+                                                       onChange={(e) => handleBulkEditChange(index, 'genre', e.target.value)}
+                                                       className="w-full p-1 mt-1 bg-gray-500 rounded-md text-white"
+                                                   />
+                                              )}
+                                         </div>
+                                         <div className="flex gap-1">
+                                             <div>
+                                                 <label className="block text-xs font-medium text-gray-400">Month</label>
+                                                 <select
+                                                     value={book.readMonth ?? 0}
+                                                     onChange={(e) => handleBulkEditChange(index, 'readMonth', parseInt(e.target.value))}
+                                                     className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                                 >
+                                                     {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                 </select>
+                                             </div>
+                                         </div>
+                                         <div>
+                                             <label className="block text-xs font-medium text-gray-400">Pages</label>
+                                             <input
+                                                 type="number"
+                                                 value={book.pageCount || 0}
+                                                 onChange={(e) => handleBulkEditChange(index, 'pageCount', parseInt(e.target.value) || 0)}
+                                                 className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white"
+                                             />
+                                         </div>
                                      </div>
                                  </div>
+                             ))}
                              </div>
-                         ))}
-                         </div>
                     ) : (
                         <div className="space-y-4 md:space-y-0 md:border-separate md:min-w-full" style={{ borderSpacing: '0 0.75rem' }}>
                             <div className="hidden md:table-header-group">
@@ -1813,7 +1845,7 @@
                             </div>
                             
                             <div className="md:table-row-group">
-                            {displayedBooks.map((book, index) => {
+                            {filteredBooks.map((book, index) => {
                                 const isEditing = editingBookId === book.id;
                                 return isEditing ? (
                                     <div key={book.id} className="md:table-row"><div className="md:table-cell md:p-0" colSpan="9"><div className="p-3 bg-indigo-900 bg-opacity-50 rounded-lg space-y-3">
@@ -1829,8 +1861,8 @@
                                             <div>
                                                 <label className="block text-xs font-medium text-gray-400">Type</label>
                                                 <select name="isFiction" value={editFormData.isFiction} onChange={handleEditFormChange} className="w-full p-1 mt-1 bg-gray-600 rounded-md text-sm text-white">
-                                                      <option value={true}>Fiction</option>
-                                                      <option value={false}>Non-Fiction</option>
+                                                    <option value={true}>Fiction</option>
+                                                    <option value={false}>Non-Fiction</option>
                                                 </select>
                                             </div>
                                             <div>
@@ -1932,75 +1964,6 @@
                             </div>
                         </div>
                     )}
-                </div>
-            );
-        }
-
-        // --- Search Component ---
-        function Search({ books, onCancel }) {
-            const [searchTerm, setSearchTerm] = useState('');
-            const [searchType, setSearchType] = useState('title'); // 'title' or 'author'
-            const [results, setResults] = useState([]);
-            const [hasSearched, setHasSearched] = useState(false);
-
-            const handleSearch = (e) => {
-                e.preventDefault();
-                if (!searchTerm.trim()) return;
-
-                const lowerCaseSearchTerm = searchTerm.toLowerCase();
-                const searchResults = books.filter(book => {
-                    if (searchType === 'title') {
-                        return book.title.toLowerCase().includes(lowerCaseSearchTerm);
-                    } else { // author
-                        return book.author.toLowerCase().includes(lowerCaseSearchTerm);
-                    }
-                });
-                setResults(searchResults);
-                setHasSearched(true);
-            };
-
-            return (
-                <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold">Search Your Library</h2>
-                        <button onClick={onCancel} className="text-gray-400 hover:text-white">&times;</button>
-                    </div>
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-6">
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={`Search by ${searchType}...`}
-                            className="flex-grow p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="p-2 bg-gray-700 rounded-md text-white">
-                            <option value="title">Title</option>
-                            <option value="author">Author</option>
-                        </select>
-                        <button type="submit" className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                            Search
-                        </button>
-                    </form>
-
-                    <div>
-                        {hasSearched && results.length > 0 && (
-                            <div className="space-y-3">
-                                {results.map(book => (
-                                    <div key={book.id} className="flex items-start gap-4 p-3 bg-gray-700 rounded-lg">
-                                        <img src={book.coverUrl} alt={book.title} className="w-10 h-16 object-cover rounded-md flex-shrink-0"/>
-                                        <div>
-                                            <p className="font-bold text-white">{book.title}</p>
-                                            <p className="text-sm text-gray-400">{book.author}</p>
-                                            <p className="text-xs text-gray-500">Read: {new Date(book.readDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {hasSearched && results.length === 0 && (
-                            <p className="text-center text-gray-400">No books found matching your search.</p>
-                        )}
-                    </div>
                 </div>
             );
         }
