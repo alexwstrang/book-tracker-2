@@ -354,7 +354,7 @@
                         <div className="flex justify-between items-baseline gap-2 mb-4 md:mb-0">
                             <div className="flex items-baseline gap-2">
                                 <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                                <span className="font-mono text-xs text-gray-500">v0.91</span>
+                                <span className="font-mono text-xs text-gray-500">v0.92</span>
                             </div>
 
                             {/* Hamburger Button - Mobile */}
@@ -1413,6 +1413,7 @@ function BooksDisplay({ books, loading, onBookUpdated, setView }) {
     const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
     const allCountries = useMemo(() => [...new Set(books.map(b => b.country).filter(Boolean))].sort(), [books]);
 
+    // This data is used only for the GoalProgress and bulk edit.
     const booksForGoalProgress = useMemo(() => {
         if (selectedPeriod === 'All Time') {
             return books;
@@ -1421,27 +1422,33 @@ function BooksDisplay({ books, loading, onBookUpdated, setView }) {
     }, [selectedPeriod, books]);
 
     const filteredBooks = useMemo(() => {
-        let booksAfterSearch = books;
-        if (searchTerm) {
-            const lowerCaseSearchTerm = searchTerm.toLowerCase();
-            booksAfterSearch = books.filter(book => {
-                const titleMatch = book.title.toLowerCase().includes(lowerCaseSearchTerm);
-                const authorMatch = book.author.toLowerCase().includes(lowerCaseSearchTerm);
-                return titleMatch || authorMatch;
-            });
+        // First, apply the search filter to the entire list of books.
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        const booksAfterSearch = books.filter(book => {
+            const titleMatch = book.title.toLowerCase().includes(lowerCaseSearchTerm);
+            const authorMatch = book.author.toLowerCase().includes(lowerCaseSearchTerm);
+            return titleMatch || authorMatch;
+        });
+
+        // Then, apply the year filter if there is no active search term.
+        if (!searchTerm && selectedPeriod !== 'All Time') {
+            return booksAfterSearch.filter(book => book.readYear === selectedPeriod);
         }
-    
-        if (selectedPeriod === 'All Time') {
-            return booksAfterSearch.sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
-        } else {
-            return booksAfterSearch.filter(book => book.readYear === selectedPeriod)
-                .sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
-        }
+
+        // Otherwise, return the sorted search results (which will be all books if the search is empty).
+        return booksAfterSearch.sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
     }, [searchTerm, selectedPeriod, books]);
 
     useEffect(() => {
+        // Automatically switch to 'All Time' view when a user starts typing.
+        if (searchTerm.length > 0 && selectedPeriod !== 'All Time') {
+            setSelectedPeriod('All Time');
+        }
+    }, [searchTerm, selectedPeriod]);
+
+    useEffect(() => {
         if (isBulkEditing && selectedPeriod !== 'All Time') {
-            const dataForEditing = filteredBooks.map(book => {
+            const dataForEditing = booksForGoalProgress.map(book => {
                 const date = new Date(book.readDate);
                 return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false, isAddingNewCountry: false };
             });
@@ -1449,10 +1456,11 @@ function BooksDisplay({ books, loading, onBookUpdated, setView }) {
         } else if (isBulkEditing && selectedPeriod === 'All Time') {
             setIsBulkEditing(false);
         }
-    }, [filteredBooks, isBulkEditing, selectedPeriod]);
+    }, [booksForGoalProgress, isBulkEditing, selectedPeriod]);
 
     const handlePeriodSelect = (period) => {
         setSelectedPeriod(period);
+        setSearchTerm(''); // Clear the search term when changing the year.
     };
     
     const handleDeleteRequest = (bookId) => {
@@ -1566,7 +1574,7 @@ function BooksDisplay({ books, loading, onBookUpdated, setView }) {
 
     const toggleBulkEdit = () => {
         if (!isBulkEditing) {
-            const dataForEditing = filteredBooks.map(book => {
+            const dataForEditing = booksForGoalProgress.map(book => {
                 const date = new Date(book.readDate);
                 return {
                     ...book,
