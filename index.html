@@ -357,14 +357,14 @@
                     const userBooks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
                     userBooks.sort((a, b) => {
-                        const orderDiff = (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity);
-                        if (orderDiff !== 0 && !isNaN(orderDiff)) {
-                            return orderDiff;
-                        }
-                        const dateA = new Date(a.readDate).getTime() || 0;
-                        const dateB = new Date(b.readDate).getTime() || 0;
-                        return dateA - dateB;
-                    });
+                        const orderDiff = (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity);
+                        if (orderDiff !== 0 && !isNaN(orderDiff)) {
+                            return orderDiff;
+                        }
+                        const dateA = new Date(a.readDate).getTime() || 0;
+                        const dateB = new Date(b.readDate).getTime() || 0;
+                        return dateA - dateB; // Oldest first
+                    });
 
                     setBooks(userBooks);
                 } catch (error) {
@@ -417,7 +417,7 @@
                     <div className="flex justify-between items-center">
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-3xl font-bold text-white">Book Tracker</h1>
-                            <span className="font-mono text-xs text-gray-500">v0.90 (revert)</span>
+                            <span className="font-mono text-xs text-gray-500">v0.91 (revert)</span>
                         </div>
 
                         {/* Hamburger Button - Mobile */}
@@ -1468,27 +1468,33 @@
             const nonFictionGenres = useMemo(() => [...new Set(books.filter(b => !b.isFiction).map(b => b.genre))], [books]);
             const allCountries = useMemo(() => [...new Set(books.map(b => b.country).filter(Boolean))].sort(), [books]);
 
-            useEffect(() => {
-                let filteredBooks;
-                if (selectedPeriod === 'All Time') {
-                    filteredBooks = [...books]; 
-                } else {
-                    filteredBooks = books.filter(b => b.readYear === selectedPeriod);
-                }
+            // Around line 1039, inside the BooksDisplay function
+// ...
+            useEffect(() => {
+                let filteredBooks;
+                if (selectedPeriod === 'All Time') {
+                    // All Time: Sort by readDate DESCENDING (Newest first)
+                    filteredBooks = [...books].sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
+                } else {
+                    // Specific Year: Filter and sort by orderIndex ASCENDING (drag-and-drop order)
+                    filteredBooks = books.filter(b => b.readYear === selectedPeriod);
+                    
+                    filteredBooks.sort((a, b) => {
+                        // 1. Sort by explicit orderIndex (for drag and drop)
+                        const orderDiff = (a.orderIndex ?? Infinity) - (b.orderIndex ?? Infinity);
+                        if (orderDiff !== 0 && !isNaN(orderDiff)) {
+                            return orderDiff;
+                        }
+                        // 2. Fallback to readDate ASCENDING (Oldest first) for books without an explicit order
+                        const dateA = new Date(a.readDate).getTime() || 0;
+                        const dateB = new Date(b.readDate).getTime() || 0;
+                        return dateA - dateB; 
+                    });
+                }
+                
+                setDisplayedBooks(filteredBooks);
 
-                if (selectedPeriod === 'All Time') {
-                     filteredBooks.sort((a, b) => new Date(b.readDate) - new Date(a.readDate));
-                }
-                
-                setDisplayedBooks(filteredBooks);
-
-                if (isBulkEditing && selectedPeriod !== 'All Time') {
-                    const dataForEditing = filteredBooks.map(book => {
-                        const date = new Date(book.readDate);
-                        return { ...book, readMonth: date.getMonth(), readYear: date.getFullYear(), isAddingNewGenre: false, isAddingNewCountry: false };
-                    });
-                    setBulkEditData(dataForEditing);
-                } else if (isBulkEditing && selectedPeriod === 'All Time') {
+                if (isBulkEditing && selectedPeriod !== 'All Time') {
                     setIsBulkEditing(false);
                 }
             }, [books, selectedPeriod, isBulkEditing]);
