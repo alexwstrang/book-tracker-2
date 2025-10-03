@@ -5,11 +5,11 @@ const { useState, useEffect } = React;
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 // Core Modules
-import { auth, onAuthStateChanged } from './core/firebase.js';
+import { auth } from '/book-tracker-2/src/core/firebase.js';
 
 // Components
-import { Login } from './components/Login.jsx'; 
-import { Dashboard } from './components/Dashboard.jsx'; 
+import { Login } from '/book-tracker-2/src/components/Login.jsx';
+import { Dashboard } from '/src/components/Dashboard.jsx'; 
 
 // --- Main App Component ---
 function App() {
